@@ -1,0 +1,2607 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SMC Gold Terminal v4.7 — Live XAUUSD Execution, Journal &amp; Analytics</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #090d16;
+  --surface: #0f1624;
+  --surface-2: #141d2f;
+  --surface-3: #1b263b;
+  --border: #1e293b;
+  --border-subtle: #162032;
+  --text: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --accent: #3b82f6;
+  --buy: #10b981;
+  --buy-bg: rgba(16, 185, 129, 0.12);
+  --sell: #ef4444;
+  --sell-bg: rgba(239, 68, 68, 0.12);
+  --warn: #f59e0b;
+  --warn-bg: rgba(245, 158, 11, 0.12);
+  --chart-bg: #787b86;
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { background: var(--bg); color: var(--text); font-family: var(--font-sans); font-size: 13px; overflow-x: hidden; }
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-thumb { background: #26344d; border-radius: 3px; }
+
+/* ---------- Data Accuracy Warning Banner ---------- */
+.accuracy-banner {
+  background: #111927; border-bottom: 1px solid var(--border); padding: 5px 16px;
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  font-size: 11px; color: var(--text-secondary);
+}
+.accuracy-banner b { color: #e2e8f0; }
+
+/* ---------- Top Navigation Bar ---------- */
+.topbar {
+  display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap;
+  padding: 10px 16px; background: var(--surface); border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; z-index: 60;
+}
+.brand { display: flex; align-items: center; gap: 10px; }
+.brand-logo {
+  width: 34px; height: 34px; border-radius: 8px; background: var(--surface-3);
+  border: 1px solid #2e4063; display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-mono); font-weight: 800; font-size: 11px; color: #fff;
+}
+.brand-title { font-weight: 700; font-size: 14px; letter-spacing: -0.2px; }
+.brand-sub { font-size: 11px; color: var(--text-muted); }
+
+.nav-tabs { display: flex; gap: 4px; background: var(--bg); padding: 4px; border-radius: 8px; border: 1px solid var(--border); }
+.nav-tab {
+  padding: 6px 14px; border-radius: 6px; border: none; background: transparent;
+  color: var(--text-secondary); font-weight: 600; font-size: 12px; cursor: pointer; transition: 0.15s;
+}
+.nav-tab:hover { color: var(--text); }
+.nav-tab.active { background: var(--surface-3); color: #fff; }
+
+.top-right { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.conn-pill {
+  display: flex; align-items: center; gap: 7px; padding: 5px 10px; border-radius: 999px;
+  background: var(--bg); border: 1px solid var(--border); font-size: 11px; font-weight: 600;
+}
+.status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--warn); }
+.status-dot.online { background: var(--buy); box-shadow: 0 0 8px var(--buy); }
+.status-dot.offline { background: var(--sell); }
+
+.btn {
+  padding: 6px 12px; border-radius: 6px; border: 1px solid var(--border);
+  background: var(--surface-2); color: var(--text); font-size: 12px; font-weight: 600;
+  cursor: pointer; transition: 0.15s; display: inline-flex; align-items: center; gap: 6px;
+}
+.btn:hover { background: var(--surface-3); }
+.btn-primary { background: var(--accent); border-color: #2563eb; color: #fff; }
+.btn-primary:hover { background: #2563eb; }
+
+/* ---------- Compact Status Strip (Replaces Bloated Gauges) ---------- */
+.status-strip {
+  display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; padding: 12px 16px 0;
+}
+.stat-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 9px;
+  padding: 9px 12px; display: flex; flex-direction: column; gap: 4px;
+}
+.stat-lbl { font-size: 10px; font-weight: 600; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.4px; }
+.stat-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.stat-val { font-size: 14px; font-weight: 700; }
+.stat-sub { font-size: 10.5px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.pill {
+  display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 5px;
+  font-size: 11px; font-weight: 700; font-family: var(--font-mono); border: 1px solid transparent;
+  white-space: nowrap;
+}
+/* ---------- Filtered / skipped setup card ---------- */
+.filter-card {
+  display: flex; align-items: center; gap: 9px; flex-wrap: wrap;
+  margin: 10px 16px 0; padding: 9px 12px; border-radius: 8px;
+  background: rgba(239, 68, 68, 0.07); border: 1px solid rgba(239, 68, 68, 0.45);
+  font-size: 11.5px; color: var(--text-secondary); line-height: 1.5;
+}
+.filter-card[hidden] { display: none; }
+.filter-card .fc-tag {
+  color: #f87171; font-weight: 800; font-size: 11px; letter-spacing: 0.5px;
+  font-family: var(--font-mono);
+}
+.filter-card .fc-rr { color: #fca5a5; font-weight: 700; font-family: var(--font-mono); }
+.filter-card .fc-prices { color: #cbd5e1; font-family: var(--font-mono); }
+.filter-card .fc-reason { color: var(--text-muted); font-style: italic; }
+.filter-card .fc-pill { margin-left: auto; }
+
+.pill-buy { color: var(--buy); background: var(--buy-bg); border-color: rgba(16,185,129,0.3); }
+.pill-sell { color: var(--sell); background: var(--sell-bg); border-color: rgba(239,68,68,0.3); }
+.pill-neutral { color: var(--text-secondary); background: var(--surface-2); border-color: var(--border); }
+.pill-warn { color: var(--warn); background: var(--warn-bg); border-color: rgba(245,158,11,0.3); }
+
+/* ---------- Views ---------- */
+.view-page { display: none; padding: 12px 16px 20px; }
+.view-page.active { display: block; }
+
+/* ---------- Dashboard Workspace ---------- */
+.dash-grid { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 12px; align-items: start; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.card-header {
+  padding: 9px 12px; background: #0c121e; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+}
+.card-title { font-size: 12px; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 8px; }
+
+.tf-group { display: flex; gap: 4px; }
+.tf-btn {
+  padding: 4px 10px; border-radius: 5px; border: 1px solid var(--border); background: var(--surface-2);
+  color: var(--text-secondary); font-family: var(--font-mono); font-size: 11px; font-weight: 700; cursor: pointer;
+}
+.tf-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+.chart-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.chk { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-secondary); cursor: pointer; user-select: none; }
+.chk input { accent-color: var(--accent); }
+
+.chart-wrap { position: relative; width: 100%; height: clamp(460px, 62vh, 660px); background: var(--chart-bg); }
+#chart { position: absolute; inset: 0; }
+#zoneOverlay {
+  position: absolute; top: 0; left: 0; pointer-events: none; z-index: 5;
+  max-width: 100%; max-height: 100%; display: block;
+}
+canvas { max-width: 100%; }
+.warn-tri { color: var(--warn); font-weight: 800; }
+
+.skeleton-loader {
+  position: absolute; inset: 0; z-index: 8; background: var(--surface);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+}
+.spinner {
+  width: 28px; height: 28px; border: 3px solid var(--border); border-top-color: var(--accent);
+  border-radius: 50%; animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.chart-footer {
+  padding: 7px 12px; background: #0c121e; border-top: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+  font-size: 11px; color: var(--text-muted);
+}
+.legend-list { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+.leg-item { display: inline-flex; align-items: center; gap: 5px; color: var(--text-secondary); }
+.sw { width: 12px; height: 8px; border-radius: 2px; display: inline-block; }
+
+/* ---------- R:R Map Toggle Dots (Demand / Supply) ---------- */
+.rr-wrap { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.rr-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: transparent; border: 1px solid var(--border); border-radius: 999px;
+  padding: 3px 10px 3px 7px; cursor: pointer; transition: all .15s ease;
+  font-family: var(--font-mono); font-size: 9.5px; font-weight: 700;
+  letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted);
+}
+.rr-btn:hover { border-color: #2b3c58; color: var(--text-secondary); }
+.rr-btn .rr-led {
+  width: 9px; height: 9px; border-radius: 50%; flex: none;
+  background: #16321f; box-shadow: inset 0 0 0 1px rgba(16,185,129,0.45);
+  transition: all .15s ease;
+}
+.rr-btn .rr-sub { font-size: 8.5px; font-weight: 600; opacity: 0.7; letter-spacing: 0.02em; }
+.rr-btn.on { color: #e8eef7; border-color: rgba(16,185,129,0.55); background: rgba(16,185,129,0.10); }
+.rr-btn.on .rr-led { background: #22c55e; box-shadow: 0 0 9px #22c55e, 0 0 0 1px rgba(34,197,94,0.9); }
+.rr-btn#btnSupplyRR.on { border-color: rgba(239,68,68,0.55); background: rgba(239,68,68,0.10); }
+.rr-btn#btnSupplyRR.on .rr-led { background: #f87171; box-shadow: 0 0 9px #f87171, 0 0 0 1px rgba(248,113,113,0.9); }
+@media (max-width: 720px) { .rr-wrap { margin-left: 0; width: 100%; justify-content: flex-start; } }
+
+/* ---------- Right Sidebar Panels ---------- */
+.side-stack { display: flex; flex-direction: column; gap: 12px; }
+.setup-panel { padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.kv-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.kv-box { background: var(--bg); border: 1px solid var(--border-subtle); border-radius: 6px; padding: 6px 8px; }
+.kv-box .k { font-size: 9.5px; color: var(--text-muted); text-transform: uppercase; }
+.kv-box .v { font-size: 12.5px; font-weight: 700; font-family: var(--font-mono); margin-top: 2px; }
+
+.grade-breakdown {
+  background: var(--bg); border: 1px solid var(--border-subtle); border-radius: 6px;
+  padding: 8px 10px; font-size: 11px; display: flex; flex-direction: column; gap: 4px;
+}
+.grade-item { display: flex; justify-content: space-between; color: var(--text-secondary); }
+.grade-item.pass { color: var(--text); }
+
+.log-list {
+  max-height: 195px; overflow-y: auto; padding: 8px 10px; font-family: var(--font-mono);
+  font-size: 10.5px; background: var(--bg); line-height: 1.5; color: var(--text-secondary);
+}
+
+/* ---------- Journal View ---------- */
+.filter-bar {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;
+  margin-bottom: 12px; background: var(--surface); padding: 10px 12px; border-radius: 9px; border: 1px solid var(--border);
+}
+.filter-group { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+select, input[type="number"], input[type="text"] {
+  background: var(--bg); border: 1px solid var(--border); color: var(--text);
+  padding: 6px 10px; border-radius: 6px; font-size: 12px; font-family: var(--font-sans);
+}
+table.journal-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+table.journal-table th, table.journal-table td {
+  padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border);
+}
+table.journal-table th {
+  font-size: 10.5px; text-transform: uppercase; color: var(--text-muted); background: #0c121e; font-weight: 700;
+}
+table.journal-table tbody tr { cursor: pointer; transition: 0.12s; }
+table.journal-table tbody tr:hover { background: var(--surface-2); }
+
+/* ---------- Stats View ---------- */
+.kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 12px; }
+.stats-split { display: grid; grid-template-columns: 1.4fr 1fr; gap: 12px; }
+.breakdown-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.breakdown-table th, .breakdown-table td { padding: 8px 10px; border-bottom: 1px solid var(--border-subtle); text-align: left; }
+.breakdown-table th { color: var(--text-muted); font-size: 10px; text-transform: uppercase; }
+
+/* ---------- Settings View ---------- */
+.settings-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; max-width: 900px; }
+.setting-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border-subtle); }
+.setting-row:last-child { border-bottom: none; }
+
+/* ---------- Screenshot Modal ---------- */
+.modal-backdrop {
+  position: fixed; inset: 0; background: rgba(3, 6, 12, 0.9); z-index: 100;
+  backdrop-filter: blur(3px);
+  display: none; align-items: center; justify-content: center; padding: 20px;
+}
+.modal-backdrop.open { display: flex; }
+.modal-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+  max-width: 1080px; width: 100%; max-height: 92vh; overflow-y: auto; padding: 16px;
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.65);
+}
+.modal-imgs { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
+.modal-imgs img { width: 100%; border-radius: 8px; border: 1px solid var(--border); background: #0b1220; display: block; }
+.shot-cap { font-size: 11px; color: var(--text-secondary); margin-bottom: 5px; }
+.shot-fallback {
+  display: flex; align-items: center; justify-content: center; text-align: center;
+  min-height: 190px; padding: 18px; border: 1px dashed var(--border); border-radius: 8px;
+  background: var(--bg); color: var(--text-muted); font-size: 11.5px;
+}
+
+@media (max-width: 1200px) {
+  .status-strip { grid-template-columns: repeat(3, 1fr); }
+  .dash-grid, .stats-split { grid-template-columns: 1fr; }
+}
+@media (max-width: 760px) {
+  .status-strip, .kpi-grid, .settings-grid, .modal-imgs { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<!-- Data Accuracy Banner -->
+<div class="accuracy-banner">
+  <div>
+    <span class="warn-tri">⚠</span> <b>Data Feed Notice:</b> Streaming Binance <code>PAXGUSDT</code> calibrated to live international Gold Spot (<span id="bannerOffset" class="mono">+0.00</span>). Minor spread differences vs. your broker's XAUUSD feed can affect exact SL/TP ticks.
+  </div>
+  <div class="mono" id="utcClock">UTC —</div>
+</div>
+
+<!-- Top Navigation Bar -->
+<header class="topbar">
+  <div class="brand">
+    <div class="brand-logo">SMC</div>
+    <div>
+      <div class="brand-title">SMC Gold Terminal <span class="pill pill-neutral" id="buildBadge">v4.7 R:R</span></div>
+      <div class="brand-sub">Swing Liquidity Targets • 1:2 R:R Filter • Auto Trade Lifecycle &amp; Screenshot Journal</div>
+    </div>
+  </div>
+
+  <nav class="nav-tabs">
+    <button class="nav-tab active" data-tab="dashboard">Dashboard</button>
+    <button class="nav-tab" data-tab="journal">Journal (<span id="navJournalCount">0</span>)</button>
+    <button class="nav-tab" data-tab="stats">Stats &amp; Analytics</button>
+    <button class="nav-tab" data-tab="settings">Settings</button>
+  </nav>
+
+  <div class="top-right">
+    <div class="conn-pill">
+      <span class="status-dot" id="connDot"></span>
+      <span id="connText">Connecting…</span>
+    </div>
+    <button class="btn" id="btnBacktest" title="Replay strategy across loaded historical candles">▶ Run Backtest (300 Bars)</button>
+    <button class="btn btn-primary" id="btnSync">↻ Sync Live</button>
+  </div>
+</header>
+
+<!-- Compact Status Cards Strip -->
+<section class="status-strip">
+  <div class="stat-card">
+    <span class="stat-lbl">XAUUSD Live</span>
+    <div class="stat-row">
+      <span class="stat-val mono" id="stPrice">—</span>
+      <span class="pill pill-neutral" id="stTfPill">5M</span>
+    </div>
+    <span class="stat-sub mono" id="stSpotSub">Spot: — | PAXG: —</span>
+  </div>
+
+  <div class="stat-card">
+    <span class="stat-lbl">HTF Bias (4H / 1H)</span>
+    <div class="stat-row">
+      <span id="stBiasPill" class="pill pill-neutral">SCANNING</span>
+    </div>
+    <span class="stat-sub" id="stBiasSub">EMA50 + Swing Structure</span>
+  </div>
+
+  <div class="stat-card">
+    <span class="stat-lbl">Active Session</span>
+    <div class="stat-row">
+      <span id="stSessionPill" class="pill pill-neutral">—</span>
+    </div>
+    <span class="stat-sub" id="stSessionSub">Kill-Zone Monitor</span>
+  </div>
+
+  <div class="stat-card">
+    <span class="stat-lbl">Signal &amp; Grade</span>
+    <div class="stat-row">
+      <span id="stSignalPill" class="pill pill-neutral">WAIT</span>
+      <span id="stGradePill" class="pill pill-neutral">—</span>
+    </div>
+    <span class="stat-sub" id="stSignalSub">Min 1:2.0 R:R Filter Active</span>
+  </div>
+
+  <div class="stat-card">
+    <span class="stat-lbl">Setup R:R (Swing TP) <span id="stSetupTfTag" style="color:var(--accent);font-family:var(--font-mono);"></span></span>
+    <div class="stat-row">
+      <span class="stat-val mono" id="stRRVal">—</span>
+      <span id="stRRFilterPill" class="pill pill-neutral">IDLE</span>
+    </div>
+    <span class="stat-sub mono" id="stTargetsSub">TP1: — | TP2: —</span>
+  </div>
+
+  <div class="stat-card">
+    <span class="stat-lbl">Live Trade Tracker</span>
+    <div class="stat-row">
+      <span id="stTradeStatePill" class="pill pill-neutral">NO ACTIVE TRADE</span>
+    </div>
+    <span class="stat-sub mono" id="stTradePnlSub">Waiting for zone setup…</span>
+  </div>
+</section>
+
+<!-- Filtered / skipped setup notice -->
+<div class="filter-card" id="filterCard" hidden>
+  <span class="fc-tag" id="fcTag">FILTERED</span>
+  <span>—</span>
+  <span class="fc-rr" id="fcRR">R:R —</span>
+  <span>—</span>
+  <span class="fc-prices" id="fcPrices">Entry — SL — TP1 —</span>
+  <span class="fc-reason" id="fcReason">Weak setup skipped.</span>
+  <span class="pill pill-sell fc-pill" id="fcPill">SKIPPED</span>
+</div>
+
+<!-- ==================== 1. DASHBOARD VIEW ==================== -->
+<main class="view-page active" id="view-dashboard">
+  <div class="dash-grid">
+    <!-- Left: Interactive Chart + TV Position Overlay -->
+    <div class="card">
+      <div class="card-header">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div class="tf-group">
+            <button class="tf-btn" data-tf="4h">4H</button>
+            <button class="tf-btn" data-tf="1h">1H</button>
+            <button class="tf-btn" data-tf="15m">15M</button>
+            <button class="tf-btn active" data-tf="5m">5M</button>
+          </div>
+          <span class="pill pill-neutral mono" id="chartZoneSummary">Zones: —</span>
+        </div>
+        <div class="chart-controls">
+          <label class="chk"><input type="checkbox" id="chkZones" checked /> Zones</label>
+          <label class="chk"><input type="checkbox" id="chkHtf" /> HTF Zones</label>
+          <label class="chk"><input type="checkbox" id="chkSwings" checked /> Swing H/L</label>
+          <label class="chk"><input type="checkbox" id="chkSessions" /> Sessions</label>
+          <label class="chk"><input type="checkbox" id="chkMitigated" /> Mitigated</label>
+        </div>
+      </div>
+
+      <div class="chart-wrap" id="chartWrap">
+        <div id="chart"></div>
+        <canvas id="zoneOverlay"></canvas>
+        <div class="skeleton-loader" id="chartLoader">
+          <div class="spinner"></div>
+          <div style="font-size:12px;color:var(--text-secondary);">Loading live XAUUSD multi-timeframe structure…</div>
+        </div>
+      </div>
+
+      <div class="chart-footer">
+        <div class="legend-list">
+          <span class="leg-item"><span class="sw" style="background:#1e53e5;"></span>Bullish (Blue)</span>
+          <span class="leg-item"><span class="sw" style="background:#0a0a0a;border:1px solid #fff;"></span>Bearish (Black)</span>
+          <span class="leg-item"><span class="sw" style="background:transparent;border:1px dashed #ef4444;"></span>Supply Zone</span>
+          <span class="leg-item"><span class="sw" style="background:transparent;border:1px dashed #10b981;"></span>Demand Zone</span>
+          <span class="leg-item"><span class="sw" style="background:#0f172a;border:1px solid #64748b;color:#cbd5e1;font-size:8px;line-height:8px;text-align:center;font-family:'JetBrains Mono',monospace;">5M</span>TF tag (solid = higher TF)</span>
+        </div>
+        <div class="rr-wrap">
+          <button class="rr-btn" id="btnDemandRR" type="button" title="Demand R:R map — projects a buy setup from entry to 1:2 (min) and 1:3 (max). Click again to remove.">
+            <span class="rr-led"></span>Demand R:R <span class="rr-sub">1:2→1:3</span>
+          </button>
+          <button class="rr-btn" id="btnSupplyRR" type="button" title="Supply R:R map — projects a sell setup from entry to 1:2 (min) and 1:3 (max). Click again to remove.">
+            <span class="rr-led"></span>Supply R:R <span class="rr-sub">1:2→1:3</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: Active Position / Setup Card + Setup Grader + Engine Log -->
+    <aside class="side-stack">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Position Tool &amp; Risk Execution</span>
+          <span id="sideTradeBadge" class="pill pill-neutral">IDLE</span>
+        </div>
+        <div class="setup-panel">
+          <div class="kv-grid">
+            <div class="kv-box"><div class="k">Direction / Grade</div><div class="v" id="pDirGrade">—</div></div>
+            <div class="kv-box"><div class="k">Entry (Zone)</div><div class="v" id="pEntry">—</div></div>
+            <div class="kv-box"><div class="k">Stop Loss (+Buf)</div><div class="v" id="pSL" style="color:var(--sell);">—</div></div>
+            <div class="kv-box"><div class="k">TP1 (Prev Swing)</div><div class="v" id="pTP1" style="color:var(--buy);">—</div></div>
+            <div class="kv-box"><div class="k">TP2 (Next Swing)</div><div class="v" id="pTP2" style="color:var(--buy);">—</div></div>
+            <div class="kv-box"><div class="k">Structural R:R</div><div class="v" id="pRR">—</div></div>
+            <div class="kv-box"><div class="k">Lot Size (1% Risk)</div><div class="v" id="pLots">—</div></div>
+            <div class="kv-box"><div class="k">Risk $ / Reward $</div><div class="v" id="pUsd">—</div></div>
+          </div>
+
+          <div class="grade-breakdown" id="gradeChecklist">
+            <div class="grade-item"><span>1. HTF Bias Alignment (4H/1H)</span><span class="mono" id="gcBias">—</span></div>
+            <div class="grade-item"><span>2. Fresh Unmitigated Zone</span><span class="mono" id="gcFresh">—</span></div>
+            <div class="grade-item"><span>3. Displacement + Volume &gt; SMA20</span><span class="mono" id="gcVol">—</span></div>
+            <div class="grade-item"><span>4. Liquidity Sweep / Rejection</span><span class="mono" id="gcSweep">—</span></div>
+            <div class="grade-item"><span>5. Structural R:R &ge; 1:2.0 Filter</span><span class="mono" id="gcRR">—</span></div>
+          </div>
+
+          <div style="display:flex;gap:6px;">
+            <button class="btn btn-primary" style="flex:1;justify-content:center;" id="btnForceTrack">Track Setup Now</button>
+            <button class="btn" id="btnCancelTrack">✕ Clear</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Active Zones (<span id="sideZoneCount">0</span>)</span>
+        </div>
+        <div class="log-list" id="sideZoneList" style="max-height:145px;">Scanning live structure…</div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Terminal Event Stream</span>
+        </div>
+        <div class="log-list" id="logBox">Initializing SMC Gold Terminal v4…</div>
+      </div>
+    </aside>
+  </div>
+</main>
+
+<!-- ==================== 2. JOURNAL VIEW ==================== -->
+<section class="view-page" id="view-journal">
+  <div class="filter-bar">
+    <div class="filter-group">
+      <b style="font-size:12px;">Filters:</b>
+      <select id="fltResult">
+        <option value="ALL">All Results</option>
+        <option value="WIN">Wins Only</option>
+        <option value="LOSS">Losses Only</option>
+        <option value="CANCELLED">Cancelled</option>
+      </select>
+      <select id="fltTF">
+        <option value="ALL">All Timeframes</option>
+        <option value="5m">5M Only</option>
+        <option value="15m">15M Only</option>
+      </select>
+      <select id="fltDir">
+        <option value="ALL">Buy &amp; Sell</option>
+        <option value="BUY">BUY Only</option>
+        <option value="SELL">SELL Only</option>
+      </select>
+      <select id="fltSource">
+        <option value="ALL">Live + Backtest</option>
+        <option value="LIVE">Live Only</option>
+        <option value="BACKTEST">Backtest Only</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <button class="btn" id="btnExportCSV">↓ Export CSV</button>
+      <button class="btn" id="btnClearJournal">Clear History</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Automated Trade Journal (Click any row to inspect Open/Close Chart Screenshots)</span>
+      <span id="journalMeta" style="font-family:var(--font-mono);font-size:10.5px;color:var(--text-muted);"></span>
+    </div>
+    <div style="overflow-x:auto;">
+      <table class="journal-table">
+        <thead>
+          <tr>
+            <th>Date / Time</th>
+            <th>Mode</th>
+            <th>TF</th>
+            <th>Session</th>
+            <th>Dir / Grade</th>
+            <th>Entry</th>
+            <th>SL</th>
+            <th>TP1 (Swing)</th>
+            <th>R:R</th>
+            <th>Result</th>
+            <th>PnL (R)</th>
+            <th>PnL ($)</th>
+            <th>Duration</th>
+            <th>Photos</th>
+          </tr>
+        </thead>
+        <tbody id="journalTbody"></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== 3. STATS VIEW ==================== -->
+<section class="view-page" id="view-stats">
+  <div id="statsEmptyNote" style="display:block;font-size:12px;color:var(--text-secondary);background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 12px;"></div>
+  <div class="kpi-grid" style="margin-top:12px;">
+    <div class="stat-card"><span class="stat-lbl">Win Rate</span><div class="stat-val mono" id="kpiWinRate">0.0%</div><span class="stat-sub" id="kpiWinSub">0W / 0L</span></div>
+    <div class="stat-card"><span class="stat-lbl">Profit Factor</span><div class="stat-val mono" id="kpiPF">0.00</div><span class="stat-sub" id="kpiAvgRR">Avg Win R:R: —</span></div>
+    <div class="stat-card"><span class="stat-lbl">Total Net R / $</span><div class="stat-val mono" id="kpiNetR">0.00R</div><span class="stat-sub mono" id="kpiNetUsd">$0.00</span></div>
+    <div class="stat-card"><span class="stat-lbl">Max Drawdown</span><div class="stat-val mono" id="kpiMaxDD" style="color:var(--sell);">0.00R</div><span class="stat-sub mono" id="kpiBestWorst">Best: — | Worst: —</span></div>
+  </div>
+
+  <div class="stats-split">
+    <div class="card">
+      <div class="card-header"><span class="card-title">Cumulative Equity Curve (R-Multiple)</span></div>
+      <div style="padding:12px;">
+        <canvas id="equityCanvas" width="700" height="290" style="width:100%;height:290px;background:var(--bg);border-radius:8px;border:1px solid var(--border-subtle);"></canvas>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><span class="card-title">Strategy Breakdown (By TF, Session &amp; Direction)</span></div>
+      <div style="padding:10px;">
+        <table class="breakdown-table" id="breakdownTable">
+          <thead>
+            <tr><th>Segment</th><th>Trades</th><th>Win Rate</th><th>Net R</th><th>Net $</th></tr>
+          </thead>
+          <tbody id="breakdownTbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== 4. SETTINGS VIEW ==================== -->
+<section class="view-page" id="view-settings">
+  <div class="card" style="padding:16px;max-width:880px;">
+    <h3 style="margin-bottom:12px;font-size:14px;">Strategy &amp; Risk Execution Settings</h3>
+    <div class="settings-grid">
+      <div>
+        <div class="setting-row">
+          <div><b>Account Balance ($)</b><div style="font-size:11px;color:var(--text-muted);">Base equity for lot &amp; PnL math</div></div>
+          <input type="number" id="setBalance" value="10000" step="500" style="width:120px;" />
+        </div>
+        <div class="setting-row">
+          <div><b>Risk Per Trade (%)</b><div style="font-size:11px;color:var(--text-muted);">Default 1.0% of account</div></div>
+          <input type="number" id="setRiskPct" value="1.0" step="0.25" style="width:120px;" />
+        </div>
+        <div class="setting-row">
+          <div><b>Entry Placement Mode</b><div style="font-size:11px;color:var(--text-muted);">Proximal zone edge or 50% equilibrium</div></div>
+          <select id="setEntryMode" style="width:140px;">
+            <option value="edge">Zone Edge (Proximal)</option>
+            <option value="mid">50% Zone Midline</option>
+          </select>
+        </div>
+        <div class="setting-row">
+          <div><b>Stop-Loss Spread Buffer ($)</b><div style="font-size:11px;color:var(--text-muted);">Added beyond distal edge of zone</div></div>
+          <input type="number" id="setSlBuf" value="0.60" step="0.10" style="width:120px;" />
+        </div>
+      </div>
+
+      <div>
+        <div class="setting-row">
+          <div><b>Minimum R:R Filter (Skip Under)</b><div style="font-size:11px;color:var(--text-muted);">Skips any setup with R:R below this threshold</div></div>
+          <input type="number" id="setMinRR" value="2.0" step="0.25" style="width:120px;" />
+        </div>
+        <div class="setting-row">
+          <div><b>Manual Broker Price Offset ($)</b><div style="font-size:11px;color:var(--text-muted);">Extra adjustment added to Spot calibration</div></div>
+          <input type="number" id="setExtraOffset" value="0.00" step="0.50" style="width:120px;" />
+        </div>
+        <div class="setting-row">
+          <div><b>Sound &amp; Browser Notifications</b><div style="font-size:11px;color:var(--text-muted);">Chime + desktop popup on Entry/TP/SL</div></div>
+          <button class="btn btn-primary" id="btnEnableAlerts">Enable Alerts</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== SCREENSHOT POPUP MODAL ==================== -->
+<div class="modal-backdrop" id="tradeModal">
+  <div class="modal-card">
+    <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);padding-bottom:10px;">
+      <div style="font-weight:700;font-size:14px;" id="modalTitle">Trade Details</div>
+      <button class="btn" id="btnCloseModal">✕ Close</button>
+    </div>
+    <div id="modalMeta" style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;font-size:12px;"></div>
+    <div class="modal-imgs">
+      <div>
+        <div class="shot-cap">1. Entry snapshot — structure at the moment of entry</div>
+        <img id="modalImgOpen" alt="" />
+        <div class="shot-fallback" id="modalFbOpen" style="display:none;">Chart data unavailable for this trade (candles for this timeframe are no longer loaded).</div>
+      </div>
+      <div>
+        <div class="shot-cap">2. Exit snapshot — TP1 or SL hit</div>
+        <img id="modalImgClose" alt="" />
+        <div class="shot-fallback" id="modalFbClose" style="display:none;">Chart data unavailable for this trade (candles for this timeframe are no longer loaded).</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Lightweight Charts v4.2.0 -->
+<script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+
+<script>
+/* ============================================================================
+   SMC GOLD TERMINAL v4 — INSTITUTIONAL EXECUTION, SWING R:R & JOURNAL ENGINE
+   ============================================================================ */
+(function () {
+  'use strict';
+
+  const TF_SEC = { '4h': 14400, '1h': 3600, '15m': 900, '5m': 300 };
+  const REST_KLINES = 'https://data-api.binance.vision/api/v3/klines';
+  const WS_STREAM = 'wss://data-stream.binance.vision/stream?streams=paxgusdt@kline_4h/paxgusdt@kline_1h/paxgusdt@kline_15m/paxgusdt@kline_5m';
+  const SPOT_URL = 'https://api.gold-api.com/price/XAU';
+  const PAXG_URL = 'https://data-api.binance.vision/api/v3/ticker/price?symbol=PAXGUSDT';
+  const STORAGE_KEY = 'smc_gold_journal_v4';
+  const ACTIVE_KEY  = 'smc_gold_active_v4';   // in-flight trade survives a page reload
+
+  const state = {
+    candles: { '4h': [], '1h': [], '15m': [], '5m': [] },
+    analysis: { '4h': null, '1h': null, '15m': null, '5m': null },
+    bias4h: { bias: 'NEUTRAL', ema50: 0, hh: false, ll: false },
+    bias1h: { bias: 'NEUTRAL', ema50: 0, hh: false, ll: false },
+    activeTF: '5m',
+    livePrice: null,
+    spotOffset: 0,
+    extraOffset: 0,
+    wsConnected: false,
+    restConnected: false,
+    alertsEnabled: false,
+    audioCtx: null,
+    currentSetup: null,    // Best valid setup on active TF
+    activeTrade: null,     // Currently tracked trade: { status: 'PENDING'|'ACTIVE', ... }
+    journal: [],           // Closed trades (metadata only — charts live in IndexedDB)
+    settledZoneIds: new Set(), // Zones already traded/cancelled this session (blocks journal spam)
+    lastFilteredZoneId: null,  // De-duplicates the FILTERED event-stream lines
+    lastArmAt: 0,
+    shotCache: new Map(),  // trade id -> { open, close } data URLs (session cache)
+    idb: null,
+    rr: { demand: false, supply: false }   // chart R:R projection maps (footer dot toggles)
+  };
+
+  /* Bumped on every rebuild — check this in the console to prove which build your browser loaded. */
+  const BUILD_STAMP = '2026-10-21 16:35 · v4.7 · per-TF signal card + single-TF R:R maps + QA pass';
+
+  let chart = null, candleSeries = null, volSeries = null, overlay = null, octx = null;
+  let drawQueued = false;
+
+  const $ = id => document.getElementById(id);
+
+  function log(msg, color = '#94a3b8') {
+    const box = $('logBox');
+    if (!box) return;
+    const t = new Date().toLocaleTimeString();
+    const div = document.createElement('div');
+    div.innerHTML = `<span style="color:#475569;">[${t}]</span> <span style="color:${color};">${msg}</span>`;
+    box.prepend(div);
+    while (box.childElementCount > 80) box.removeChild(box.lastChild);
+  }
+
+  function getCfg() {
+    return {
+      balance: parseFloat($('setBalance').value) || 10000,
+      riskPct: parseFloat($('setRiskPct').value) || 1.0,
+      entryMode: $('setEntryMode').value || 'edge',
+      slBuf: parseFloat($('setSlBuf').value) || 0.60,
+      minRR: parseFloat($('setMinRR').value) || 2.0,
+      extraOffset: parseFloat($('setExtraOffset').value) || 0
+    };
+  }
+
+  /* ---------------- 1. QUANT STRATEGY & SWING TARGET ENGINE ---------------- */
+  const Quant = {
+    ema(arr, period) {
+      if (!arr.length) return 0;
+      const k = 2 / (period + 1);
+      let e = arr[0];
+      for (let i = 1; i < arr.length; i++) e = arr[i] * k + e * (1 - k);
+      return e;
+    },
+
+    /* Fractal Swing Highs & Swing Lows (used for structure & TP1/TP2 targets) */
+    findSwings(closed, leftRight = 3) {
+      const swings = [];
+      for (let i = leftRight; i < closed.length - leftRight; i++) {
+        let isH = true, isL = true;
+        for (let j = i - leftRight; j <= i + leftRight; j++) {
+          if (j === i) continue;
+          if (closed[j].high >= closed[i].high) isH = false;
+          if (closed[j].low <= closed[i].low) isL = false;
+        }
+        if (isH) swings.push({ idx: i, time: closed[i].time, price: closed[i].high, type: 'high' });
+        if (isL) swings.push({ idx: i, time: closed[i].time, price: closed[i].low, type: 'low' });
+      }
+      return swings;
+    },
+
+    computeHTFBias(candles) {
+      const closed = candles.slice(0, -1);
+      if (closed.length < 55) return { bias: 'NEUTRAL', ema20: 0, ema50: 0, price: 0, hh: false, ll: false };
+      const closes = closed.map(c => c.close);
+      const ema20 = Quant.ema(closes, 20);
+      const ema50 = Quant.ema(closes, 50);
+      const price = candles[candles.length - 1].close;
+      const sw = Quant.findSwings(closed, 2);
+      const highs = sw.filter(s => s.type === 'high');
+      const lows = sw.filter(s => s.type === 'low');
+      const hh = highs.length >= 2 && highs[highs.length - 1].price > highs[highs.length - 2].price;
+      const ll = lows.length >= 2 && lows[lows.length - 1].price < lows[lows.length - 2].price;
+
+      let bias = 'NEUTRAL';
+      if ((price > ema50 && ema20 >= ema50) || (price > ema50 && hh)) bias = 'BULLISH';
+      else if ((price < ema50 && ema20 <= ema50) || (price < ema50 && ll)) bias = 'BEARISH';
+      return { bias, ema20, ema50, price, hh, ll };
+    },
+
+    /* Detects Supply (1 Blue -> 1 Impulsive Black OR 3 Black) & Demand (1 Black -> 3 Blue + Full Vol) */
+    scanTimeframe(candles, tf) {
+      const closed = candles.slice(0, -1);
+      if (closed.length < 30) return { supply: [], demand: [], swings: [], avgBody: 1, volSMA: 1 };
+      const avgBody = closed.reduce((s, c) => s + Math.abs(c.close - c.open), 0) / closed.length;
+      const swings = Quant.findSwings(closed, 3);
+      const n = closed.length;
+      const supply = [], demand = [];
+
+      // Supply Detection
+      for (let i = 0; i + 1 < n; i++) {
+        const blue = closed[i], k1 = closed[i + 1];
+        if (!(blue.close > blue.open && k1.close < k1.open)) continue;
+
+        const oneBlackImpulse = (k1.open - k1.close) > avgBody * 1.25 && k1.close < blue.open;
+        let threeBlackImpulse = false;
+        let top = Math.max(blue.high, k1.high);
+        let checkIdx = i + 2;
+
+        if (i + 3 < n) {
+          const k2 = closed[i + 2], k3 = closed[i + 3];
+          if (k2.close < k2.open && k3.close < k3.open && (blue.open - k3.close) > avgBody * 1.15 && k3.close < blue.open) {
+            threeBlackImpulse = true;
+            top = Math.max(blue.high, k1.high, k2.high, k3.high);
+            checkIdx = i + 4;
+          }
+        }
+        if (!oneBlackImpulse && !threeBlackImpulse) continue;
+
+        const bottom = Math.min(blue.open, top - Math.max(avgBody * 0.4, 0.5));
+        if (bottom >= top) continue;
+
+        const winStart = Math.max(0, i - 19);
+        const sma20 = closed.slice(winStart, i + 2).reduce((s, c) => s + c.volume, 0) / (i + 2 - winStart);
+        const hasVol = k1.volume > sma20;
+        const prevHighs = swings.filter(s => s.type === 'high' && s.idx < i && s.idx >= i - 25);
+        const sweptLiquidity = prevHighs.some(sh => top > sh.price && k1.close < sh.price);
+
+        let broken = false, endTime = null, touchCount = 0;
+        for (let j = checkIdx; j < n; j++) {
+          if (closed[j].close > top) { broken = true; endTime = closed[j].time; break; }
+          if (closed[j].high >= bottom && closed[j].close <= top) touchCount++;
+        }
+
+        supply.push({
+          id: `SUP_${tf}_${blue.time}`, type: 'supply', tf, top, bottom, mid: (top + bottom) / 2,
+          startTime: blue.time, endTime, broken, touchCount, hasVol, sweptLiquidity,
+          rule: threeBlackImpulse ? '1B→3K' : '1B→1K'
+        });
+      }
+
+      // Demand Detection (1 Black -> 3 Blue + Volume > SMA20)
+      for (let i = 0; i + 3 < n; i++) {
+        const c0 = closed[i], c1 = closed[i + 1], c2 = closed[i + 2], c3 = closed[i + 3];
+        if (!(c0.close < c0.open && c1.close > c1.open && c2.close > c2.open && c3.close > c3.open)) continue;
+        const avg3 = (c1.volume + c2.volume + c3.volume) / 3;
+        const winStart = Math.max(0, i + 3 - 19);
+        const sma20 = closed.slice(winStart, i + 4).reduce((s, c) => s + c.volume, 0) / (i + 4 - winStart);
+        if (!(avg3 > sma20 && c3.close > c0.high)) continue;
+
+        const bottom = Math.min(c0.low, c1.low);
+        const top = Math.max(c0.open, bottom + Math.max(avgBody * 0.4, 0.5));
+        if (top <= bottom) continue;
+
+        const prevLows = swings.filter(s => s.type === 'low' && s.idx < i && s.idx >= i - 25);
+        const sweptLiquidity = prevLows.some(sl => bottom < sl.price && c1.close > sl.price);
+
+        let broken = false, endTime = null, touchCount = 0;
+        for (let j = i + 4; j < n; j++) {
+          if (closed[j].close < bottom) { broken = true; endTime = closed[j].time; break; }
+          if (closed[j].low <= top && closed[j].close >= bottom) touchCount++;
+        }
+
+        demand.push({
+          id: `DEM_${tf}_${c0.time}`, type: 'demand', tf, top, bottom, mid: (top + bottom) / 2,
+          startTime: c0.time, endTime, broken, touchCount, hasVol: true, sweptLiquidity,
+          rule: '1K→3B+Vol'
+        });
+      }
+
+      const keep = arr => arr.filter(z => !z.broken).concat(arr.filter(z => z.broken).slice(-3));
+      return { supply: keep(supply), demand: keep(demand), swings, avgBody, volSMA: 1 };
+    },
+
+    /* Builds a complete Setup from a Zone using Structural Swing High/Low Targets & 1:2 R:R Filter */
+    buildSwingSetup(zone, allZones, swings, bias4h, bias1h, cfg) {
+      if (!zone || zone.broken) return null;
+      const isBuy = zone.type === 'demand';
+      const dir = isBuy ? 'BUY' : 'SELL';
+      const entry = cfg.entryMode === 'mid' ? zone.mid : (isBuy ? zone.top : zone.bottom);
+      const sl = isBuy ? (zone.bottom - cfg.slBuf) : (zone.top + cfg.slBuf);
+      const risk = Math.abs(entry - sl);
+      if (risk <= 0.05) return null;
+
+      // Collect candidate structural targets (Previous Swing Highs/Lows + Opposing Unmitigated Zones)
+      const candidates = [];
+      if (isBuy) {
+        swings.filter(s => s.type === 'high' && s.price > entry + risk * 0.8).forEach(s => candidates.push({ price: s.price, src: 'Swing High' }));
+        allZones.filter(z => !z.broken && z.type === 'supply' && z.bottom > entry + risk * 0.8).forEach(z => candidates.push({ price: z.bottom, src: `${z.tf.toUpperCase()} Supply` }));
+        candidates.sort((a, b) => a.price - b.price);
+      } else {
+        swings.filter(s => s.type === 'low' && s.price < entry - risk * 0.8).forEach(s => candidates.push({ price: s.price, src: 'Swing Low' }));
+        allZones.filter(z => !z.broken && z.type === 'demand' && z.top < entry - risk * 0.8).forEach(z => candidates.push({ price: z.top, src: `${z.tf.toUpperCase()} Demand` }));
+        candidates.sort((a, b) => b.price - a.price);
+      }
+
+      // Deduplicate closely spaced structural levels
+      const uniqueTargets = [];
+      candidates.forEach(c => {
+        if (!uniqueTargets.length || Math.abs(c.price - uniqueTargets[uniqueTargets.length - 1].price) > risk * 0.5) {
+          uniqueTargets.push(c);
+        }
+      });
+
+      // Pick first structural target that achieves meaningful swing structure (or fallback to highest structural swing)
+      let tp1Obj = uniqueTargets.find(t => Math.abs(t.price - entry) / risk >= cfg.minRR) || uniqueTargets[0];
+      if (!tp1Obj) {
+        tp1Obj = { price: isBuy ? entry + risk * cfg.minRR : entry - risk * cfg.minRR, src: 'Structure Projection' };
+      }
+      const tp1Idx = uniqueTargets.indexOf(tp1Obj);
+      const tp2Obj = (tp1Idx >= 0 && uniqueTargets[tp1Idx + 1])
+        ? uniqueTargets[tp1Idx + 1]
+        : { price: isBuy ? tp1Obj.price + risk * 1.2 : tp1Obj.price - risk * 1.2, src: 'Extended Swing' };
+
+      const tp1 = tp1Obj.price;
+      const tp2 = tp2Obj.price;
+      const rr = Math.abs(tp1 - entry) / risk;
+      const rr2 = Math.abs(tp2 - entry) / risk;
+      const passesRR = rr >= cfg.minRR;
+
+      // Setup Grading (A+, A, B, SKIP)
+      const htfAligned = (isBuy && (bias4h.bias === 'BULLISH' || bias1h.bias === 'BULLISH')) ||
+                         (!isBuy && (bias4h.bias === 'BEARISH' || bias1h.bias === 'BEARISH'));
+      const bothHtfAligned = (isBuy && bias4h.bias === 'BULLISH' && bias1h.bias === 'BULLISH') ||
+                             (!isBuy && bias4h.bias === 'BEARISH' && bias1h.bias === 'BEARISH');
+      const isFresh = zone.touchCount <= 1;
+
+      let pts = 0;
+      if (bothHtfAligned) pts += 2; else if (htfAligned) pts += 1;
+      if (isFresh) pts += 1;
+      if (zone.hasVol) pts += 1;
+      if (zone.sweptLiquidity) pts += 1;
+      if (passesRR) pts += 2;
+
+      let grade = 'B';
+      if (!passesRR) grade = 'SKIP (R:R < 1:' + cfg.minRR + ')';
+      else if (pts >= 6) grade = 'A+';
+      else if (pts >= 4) grade = 'A';
+
+      const riskUsd = cfg.balance * (cfg.riskPct / 100);
+      const lots = riskUsd / (risk * 100);
+      const rewardUsd = riskUsd * rr;
+
+      return {
+        id: zone.id, zone, dir, grade, entry, sl, tp1, tp2,
+        tp1Src: tp1Obj.src, tp2Src: tp2Obj.src,
+        risk, rr, rr2, passesRR, riskUsd, rewardUsd, lots,
+        checks: { htfAligned, bothHtfAligned, isFresh, hasVol: zone.hasVol, swept: zone.sweptLiquidity, passesRR }
+      };
+    },
+
+    /* Session & Kill-Zone detector (UTC) */
+    getSession(unixSec) {
+      const d = unixSec ? new Date(unixSec * 1000) : new Date();
+      const h = d.getUTCHours();
+      if (h >= 7 && h < 10) return { name: 'London Killzone', short: 'LONDON KZ', color: 'rgba(59,130,246,0.09)' };
+      if (h >= 12 && h < 15) return { name: 'NY Killzone', short: 'NY KZ', color: 'rgba(16,185,129,0.09)' };
+      if (h >= 7 && h < 16) return { name: 'London Session', short: 'LONDON', color: 'rgba(59,130,246,0.04)' };
+      if (h >= 12 && h < 21) return { name: 'New York Session', short: 'NEW YORK', color: 'rgba(16,185,129,0.04)' };
+      return { name: 'Asia Session', short: 'ASIA', color: 'rgba(148,163,184,0.03)' };
+    }
+  };
+
+  /* ---------------- 2. PER-TRADE CHART RENDERER + IMAGE STORE ----------------
+     Every journal entry gets two charts reconstructed from the trade's OWN
+     timeframe and timestamp (entry snapshot / exit snapshot). This replaces
+     chart.takeScreenshot(), which captured whatever TF the user happened to be
+     looking at and produced identical images for every backtest row.          */
+  const IDB_NAME = 'smc_gold_shots_v4';
+  const IDB_STORE = 'shots';
+
+  function openIDB() {
+    return new Promise(resolve => {
+      if (!('indexedDB' in window)) return resolve(null);
+      try {
+        const req = indexedDB.open(IDB_NAME, 1);
+        req.onupgradeneeded = () => {
+          const db = req.result;
+          if (!db.objectStoreNames.contains(IDB_STORE)) db.createObjectStore(IDB_STORE, { keyPath: 'id' });
+        };
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => resolve(null);
+        req.onblocked = () => resolve(null);
+      } catch (e) { resolve(null); }
+    });
+  }
+
+  function putShots(id, shots) {
+    if (!id) return;
+    state.shotCache.set(id, shots);
+    const db = state.idb;
+    if (!db) return;
+    try {
+      db.transaction(IDB_STORE, 'readwrite')
+        .objectStore(IDB_STORE)
+        .put({ id, open: shots.open || '', close: shots.close || '', savedAt: Date.now() });
+    } catch (e) {}
+  }
+
+  function getShots(id) {
+    return new Promise(resolve => {
+      if (state.shotCache.has(id)) return resolve(state.shotCache.get(id));
+      const db = state.idb;
+      if (!db) return resolve(null);
+      try {
+        const rq = db.transaction(IDB_STORE, 'readonly').objectStore(IDB_STORE).get(id);
+        rq.onsuccess = () => {
+          const v = rq.result || null;
+          if (v) state.shotCache.set(id, v);
+          resolve(v);
+        };
+        rq.onerror = () => resolve(null);
+      } catch (e) { resolve(null); }
+    });
+  }
+
+  function clearShotStore() {
+    state.shotCache.clear();
+    const db = state.idb;
+    if (!db) return;
+    try { db.transaction(IDB_STORE, 'readwrite').objectStore(IDB_STORE).clear(); } catch (e) {}
+  }
+
+  /* Draws one trade chart. phase: 'open' (structure at entry) or 'close' (at exit). */
+  function renderTradeChart(rec, phase) {
+    try {
+      const arr = (state.candles[rec.tf] || []).filter(c => Number.isFinite(c.time));
+      if (arr.length < 8) return '';
+
+      const stamp = phase === 'close'
+        ? (rec.closedAt || rec.openedAt || Date.now())
+        : (rec.openedAt || rec.createdAt || Date.now());
+      const cut = Math.floor(stamp / 1000);
+
+      let view = arr.filter(c => c.time <= cut);
+      view = view.length >= 8 ? view.slice(-90) : arr.slice(0, Math.min(90, arr.length));
+      if (view.length < 8) return '';
+
+      const W = 1040, H = 540;
+      const PADL = 16, PADR = 86, PADT = 46, PADB = 26;
+      const plotW = W - PADL - PADR, plotH = H - PADT - PADB;
+
+      const levels = [rec.entry, rec.sl, rec.tp1, rec.tp2].filter(Number.isFinite);
+      let pMin = Math.min(...view.map(c => c.low), ...levels);
+      let pMax = Math.max(...view.map(c => c.high), ...levels);
+      if (!(pMax > pMin)) return '';
+      const padY = (pMax - pMin) * 0.07;
+      pMin -= padY; pMax += padY;
+
+      const cv = document.createElement('canvas');
+      cv.width = W; cv.height = H;
+      const g = cv.getContext('2d');
+      const yOf = p => PADT + ((pMax - p) / (pMax - pMin)) * plotH;
+      const slot = plotW / view.length;
+      const xOf = i => PADL + (i + 0.5) * slot;
+      const bodyW = Math.max(2, slot * 0.62);
+
+      // Chart surface (matches the in-app TradingView-style grey panel)
+      g.fillStyle = '#787b86'; g.fillRect(0, 0, W, H);
+      g.fillStyle = 'rgba(255,255,255,0.055)';
+      g.fillRect(PADL, PADT, plotW, plotH);
+
+      // Horizontal grid + right-hand price axis
+      g.font = '600 11px "JetBrains Mono", monospace';
+      g.textAlign = 'left'; g.textBaseline = 'middle';
+      for (let k = 0; k <= 6; k++) {
+        const y = PADT + (plotH / 6) * k;
+        g.strokeStyle = 'rgba(255,255,255,0.09)';
+        g.lineWidth = 1;
+        g.beginPath(); g.moveTo(PADL, y); g.lineTo(PADL + plotW, y); g.stroke();
+        const price = pMax - ((pMax - pMin) / 6) * k;
+        g.fillStyle = 'rgba(15,23,42,0.62)';
+        g.fillText(price.toFixed(2), PADL + plotW + 8, y);
+      }
+
+      // Session shading behind the price (killzones only, intraday TFs)
+      if (rec.tf === '5m' || rec.tf === '15m') {
+        view.forEach((c, i) => {
+          const sess = Quant.getSession(c.time);
+          if (!sess.short.includes('KZ')) return;
+          g.fillStyle = sess.short.includes('NY') ? 'rgba(16,185,129,0.10)' : 'rgba(59,130,246,0.10)';
+          g.fillRect(xOf(i) - slot / 2, PADT, slot, plotH);
+        });
+      }
+
+      // Candles
+      view.forEach((c, i) => {
+        const x = xOf(i);
+        const up = c.close >= c.open;
+        const col = up ? '#1e53e5' : '#0a0a0a';
+        g.strokeStyle = col;
+        g.lineWidth = 1;
+        g.beginPath(); g.moveTo(x, yOf(c.high)); g.lineTo(x, yOf(c.low)); g.stroke();
+        const yO = yOf(c.open), yC = yOf(c.close);
+        g.fillStyle = col;
+        g.fillRect(x - bodyW / 2, Math.min(yO, yC), bodyW, Math.max(1.5, Math.abs(yC - yO)));
+      });
+
+      // Entry candle marker → everything to its right is post-entry
+      const entryIdx = Math.max(0, view.findIndex(c => c.time * 1000 >= (rec.openedAt || 0)));
+      const xEntry = xOf(entryIdx);
+
+      // Zone the trade was taken from
+      if (Number.isFinite(rec.zoneTop) && Number.isFinite(rec.zoneBottom) && rec.zoneTop > rec.zoneBottom) {
+        const yT = yOf(rec.zoneTop), yB = yOf(rec.zoneBottom);
+        g.fillStyle = rec.dir === 'BUY' ? 'rgba(16,185,129,0.30)' : 'rgba(239,68,68,0.30)';
+        g.fillRect(PADL, yT, plotW, Math.max(2, yB - yT));
+        g.strokeStyle = rec.dir === 'BUY' ? '#10b981' : '#ef4444';
+        g.setLineDash([5, 4]); g.lineWidth = 1;
+        g.strokeRect(PADL, yT, plotW, Math.max(2, yB - yT));
+        g.setLineDash([]);
+        g.fillStyle = rec.dir === 'BUY' ? '#d1fae5' : '#fee2e2';
+        g.font = '700 10px Inter, sans-serif';
+        g.fillText(`${rec.dir === 'BUY' ? 'DEMAND' : 'SUPPLY'} ZONE ${rec.zoneBottom.toFixed(2)}-${rec.zoneTop.toFixed(2)}`, PADL + 6, yT + 10);
+      }
+
+      // Post-entry risk / reward bands
+      const yE = yOf(rec.entry), ySL = yOf(rec.sl), yTP = yOf(rec.tp1);
+      g.fillStyle = 'rgba(16,185,129,0.16)';
+      g.fillRect(xEntry, Math.min(yE, yTP), plotW - (xEntry - PADL), Math.abs(yTP - yE));
+      g.fillStyle = 'rgba(239,68,68,0.20)';
+      g.fillRect(xEntry, Math.min(yE, ySL), plotW - (xEntry - PADL), Math.abs(ySL - yE));
+
+      // Level lines with right-edge price tags
+      const drawLevel = (price, color, label, dashed) => {
+        if (!Number.isFinite(price)) return;
+        const y = yOf(price);
+        g.strokeStyle = color;
+        g.lineWidth = label === 'ENTRY' ? 2 : 1.4;
+        g.setLineDash(dashed ? [6, 4] : []);
+        g.beginPath(); g.moveTo(PADL, y); g.lineTo(PADL + plotW, y); g.stroke();
+        g.setLineDash([]);
+
+        g.fillStyle = color;
+        g.fillRect(PADL + plotW + 2, y - 9, PADR - 8, 18);
+        g.fillStyle = '#0b1220';
+        g.font = '700 10.5px "JetBrains Mono", monospace';
+        g.textAlign = 'left'; g.textBaseline = 'middle';
+        g.fillText(`${label} ${price.toFixed(2)}`, PADL + plotW + 7, y);
+      };
+      drawLevel(rec.tp2, '#059669', 'TP2', true);
+      drawLevel(rec.tp1, '#10b981', 'TP1', true);
+      drawLevel(rec.sl, '#ef4444', 'SL', true);
+      drawLevel(rec.entry, '#f8fafc', 'ENTRY', false);
+
+      // Header bar
+      g.fillStyle = 'rgba(9,13,22,0.92)';
+      g.fillRect(0, 0, W, PADT);
+      g.textAlign = 'left'; g.textBaseline = 'middle';
+      g.fillStyle = '#f1f5f9';
+      g.font = '800 14px Inter, sans-serif';
+      const head = `XAUUSD ${(rec.tf || '').toUpperCase()} · ${rec.dir} (${rec.grade || '—'}) · 1:${Number(rec.rr || 0).toFixed(2)} R:R`;
+      g.fillText(head, 14, 17);
+      g.fillStyle = '#94a3b8';
+      g.font = '600 11px "JetBrains Mono", monospace';
+      const when = new Date(stamp).toISOString().replace('T', ' ').slice(0, 16) + ' UTC';
+      g.fillText(`${rec.session || '—'} · ${when}`, 14, 34);
+
+      g.textAlign = 'right';
+      const isExit = phase === 'close';
+      g.font = '800 12px Inter, sans-serif';
+      let tagTxt, tagCol;
+      if (!isExit) { tagTxt = 'ENTRY SNAPSHOT'; tagCol = '#38bdf8'; }
+      else if (rec.result === 'WIN') { tagTxt = `EXIT · TP1 HIT +${Number(rec.rMultiple || 0).toFixed(2)}R`; tagCol = '#10b981'; }
+      else if (rec.result === 'LOSS') { tagTxt = `EXIT · SL HIT ${Number(rec.rMultiple || 0).toFixed(2)}R`; tagCol = '#ef4444'; }
+      else { tagTxt = `EXIT · ${rec.result || 'CLOSED'}`; tagCol = '#f59e0b'; }
+      g.fillStyle = tagCol;
+      g.fillText(tagTxt, W - 14, 17);
+
+      // Footer watermark
+      g.textAlign = 'left';
+      g.fillStyle = 'rgba(15,23,42,0.55)';
+      g.font = '600 9.5px Inter, sans-serif';
+      g.fillText('SMC Gold Terminal v4 · reconstructed from PAXGUSDT stream · broker XAUUSD prices may differ by spread', 14, H - 12);
+
+      return cv.toDataURL('image/jpeg', 0.82);
+    } catch (e) {
+      return '';
+    }
+  }
+
+  /* ---------------- 3. ALERTS (SOUND + BROWSER NOTIFICATION) ---------------- */
+  function triggerAlert(title, body, type = 'BUY') {
+    log(`[ALERT] ${title}: ${body}`, type === 'BUY' ? '#10b981' : type === 'SELL' ? '#ef4444' : '#f59e0b');
+    if (!state.alertsEnabled) return;
+    try {
+      if (!state.audioCtx) state.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const ctx = state.audioCtx;
+      const osc = ctx.createOscillator(), g = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = type === 'BUY' ? 880 : 440;
+      g.gain.setValueAtTime(0.15, ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.45);
+      osc.connect(g); g.connect(ctx.destination);
+      osc.start(); osc.stop(ctx.currentTime + 0.45);
+    } catch (e) {}
+
+    if ('Notification' in window && Notification.permission === 'granted') {
+      try { new Notification(title, { body }); } catch (e) {}
+    }
+  }
+
+  /* ---------------- 4. LIVE TRADE LIFECYCLE STATE MACHINE ---------------- */
+  function evaluateTradeLifecycle(latestCandle) {
+    if (!latestCandle) return;
+    const price = latestCandle.close;
+
+    // 1. If no active/pending trade, auto-arm the best current setup if it passes the 1:2 R:R filter.
+    //    A zone is only ever armed once per session (settledZoneIds) and there is a cooldown
+    //    between arms, so a single zone can no longer spam the journal with duplicate rows.
+    if (!state.activeTrade && state.currentSetup && state.currentSetup.passesRR) {
+      const s = state.currentSetup;
+      const zoneKey = s.zone && s.zone.id;
+      const alreadySettled = zoneKey && state.settledZoneIds.has(zoneKey);
+      const cooledDown = Date.now() - state.lastArmAt > 5 * 60 * 1000;
+      const act = setupActionability(s, price);
+      if (!alreadySettled && cooledDown && act.ok) {
+        armTradeFromSetup(s, false);
+      }
+    }
+
+    const tr = state.activeTrade;
+    if (!tr) return;
+
+    // Check if the underlying zone was broken before entry
+    if (tr.status === 'PENDING') {
+      const brokenBuy = tr.dir === 'BUY' && latestCandle.close < tr.sl;
+      const brokenSell = tr.dir === 'SELL' && latestCandle.close > tr.sl;
+      const missedTarget = (tr.dir === 'BUY' && latestCandle.high >= tr.tp1) || (tr.dir === 'SELL' && latestCandle.low <= tr.tp1);
+
+      if (brokenBuy || brokenSell || missedTarget) {
+        tr.status = 'CANCELLED';
+        tr.closedAt = Date.now();
+        tr.result = 'CANCELLED';
+        tr.rMultiple = 0;
+        tr.pnlUsd = 0;
+        if (tr.zoneId) state.settledZoneIds.add(tr.zoneId);
+        saveTradeToJournal(tr);
+        persistActiveTrade();
+        triggerAlert('Setup Cancelled', `${tr.tf.toUpperCase()} ${tr.dir} invalidated before entry.`, 'WARN');
+        state.activeTrade = null;
+        persistActiveTrade();
+        return;
+      }
+
+      // Check if Entry was touched
+      const touchedBuy = tr.dir === 'BUY' && latestCandle.low <= tr.entry && latestCandle.high >= tr.entry;
+      const touchedSell = tr.dir === 'SELL' && latestCandle.high >= tr.entry && latestCandle.low <= tr.entry;
+      const insideZoneNow = (tr.dir === 'BUY' && price <= tr.entry && price > tr.sl) || (tr.dir === 'SELL' && price >= tr.entry && price < tr.sl);
+
+      if (touchedBuy || touchedSell || insideZoneNow) {
+        tr.status = 'ACTIVE';
+        tr.openedAt = Date.now();
+        persistActiveTrade();
+        triggerAlert(`Trade ACTIVE (${tr.dir} ${tr.grade})`, `Entered @ $${tr.entry.toFixed(2)} | SL $${tr.sl.toFixed(2)} | TP1 $${tr.tp1.toFixed(2)} (1:${tr.rr.toFixed(2)})`, tr.dir);
+      }
+    }
+
+    // 2. If trade is ACTIVE, check SL and TP1 hits (Conservative rule: if both hit in same candle -> SL HIT)
+    if (tr.status === 'ACTIVE') {
+      const slHit = tr.dir === 'BUY' ? (latestCandle.low <= tr.sl || price <= tr.sl) : (latestCandle.high >= tr.sl || price >= tr.sl);
+      const tpHit = tr.dir === 'BUY' ? (latestCandle.high >= tr.tp1 || price >= tr.tp1) : (latestCandle.low <= tr.tp1 || price <= tr.tp1);
+
+      if (slHit || tpHit) {
+        // Safe conservative assumption: if both touched in same bar, count as SL
+        const isWin = tpHit && !slHit;
+        tr.status = isWin ? 'TP HIT' : 'SL HIT';
+        tr.result = isWin ? 'WIN' : 'LOSS';
+        tr.closedAt = Date.now();
+        tr.rMultiple = isWin ? Number(tr.rr.toFixed(2)) : -1.0;
+        tr.pnlUsd = Number((tr.rMultiple * tr.riskUsd).toFixed(2));
+        if (tr.zoneId) state.settledZoneIds.add(tr.zoneId);
+        saveTradeToJournal(tr);
+        persistActiveTrade();
+        state.activeTrade = null;
+        persistActiveTrade();   // trade is closed — drop the persisted copy
+        triggerAlert(`Trade Closed: ${tr.result}`, `${tr.dir} ${tr.tf.toUpperCase()} closed for ${tr.rMultiple > 0 ? '+' : ''}${tr.rMultiple}R ($${tr.pnlUsd.toFixed(2)})`, isWin ? 'BUY' : 'SELL');
+      }
+    }
+  }
+
+  function armTradeFromSetup(s, manual = false) {
+    if (!s) return;
+    const sess = Quant.getSession();
+    state.activeTrade = {
+      id: 'TR_' + Date.now() + '_' + Math.floor(Math.random() * 999),
+      mode: 'LIVE',
+      tf: s.zone.tf,
+      session: sess.short,
+      dir: s.dir,
+      grade: s.grade,
+      entry: s.entry,
+      sl: s.sl,
+      tp1: s.tp1,
+      tp2: s.tp2,
+      rr: s.rr,
+      riskUsd: s.riskUsd,
+      lots: s.lots,
+      zoneId: s.zone.id,
+      zoneBottom: s.zone.bottom,
+      zoneTop: s.zone.top,
+      startTime: s.zone.startTime,
+      status: 'PENDING',
+      createdAt: Date.now(),
+      openedAt: null,
+      closedAt: null
+    };
+    state.lastArmAt = Date.now();
+    persistActiveTrade();
+    log(`[TRACK] ${s.zone.tf.toUpperCase()} ${s.dir} (${s.grade}) Pending @ $${s.entry.toFixed(2)} | TP1 $${s.tp1.toFixed(2)} (1:${s.rr.toFixed(2)})`, '#60a5fa');
+    if (manual) updateDashboardUI();
+  }
+
+  /* ---------------- 5. HISTORICAL BACKTEST ENGINE (300 BARS) ---------------- */
+  function runHistoricalBacktest() {
+    const tf = (state.activeTF === '5m' || state.activeTF === '15m') ? state.activeTF : '5m';
+    const candles = state.candles[tf];
+    if (!candles || candles.length < 80) {
+      log('Not enough candles loaded for backtest yet.', '#ef4444');
+      return;
+    }
+    if (state.activeTF !== tf) {
+      log(`Backtest executes on the ${tf.toUpperCase()} execution timeframe (chart is on ${state.activeTF.toUpperCase()}).`, '#f59e0b');
+    }
+    const cfg = getCfg();
+    let wins = 0, losses = 0, netR = 0;
+    const usedZoneIds = new Set();
+    const btTrades = [];
+
+    /* HTF bias as it existed AT THAT BAR — no look-ahead. Only candles fully closed
+       on or before the execution bar's timestamp are used, with a binary search
+       per lookup so the walk stays linear. */
+    const htfSeries = { '4h': state.candles['4h'] || [], '1h': state.candles['1h'] || [] };
+    const NEUTRAL = { bias: 'NEUTRAL', ema20: 0, ema50: 0, price: 0, hh: false, ll: false };
+    const biasAsOf = (tfKey, tSec) => {
+      const series = htfSeries[tfKey];
+      const span = TF_SEC[tfKey];
+      let lo = 0, hi = series.length;
+      while (lo < hi) {
+        const mid = (lo + hi) >> 1;
+        if (series[mid].time + span <= tSec) lo = mid + 1; else hi = mid;
+      }
+      if (lo < 60) return NEUTRAL;
+      return Quant.computeHTFBias(series.slice(Math.max(0, lo - 140), lo));
+    };
+
+    // Walk bar-by-bar from bar 60 to end
+    for (let idx = 60; idx < candles.length - 1; idx++) {
+      const slice = candles.slice(0, idx + 1);
+      const scan = Quant.scanTimeframe(slice, tf);
+      const allZ = scan.supply.concat(scan.demand).filter(z => !z.broken);
+      const bias4h = biasAsOf('4h', candles[idx].time);
+      const bias1h = biasAsOf('1h', candles[idx].time);
+
+      for (const z of allZ) {
+        if (usedZoneIds.has(z.id)) continue;
+        const setup = Quant.buildSwingSetup(z, allZ, scan.swings, bias4h, bias1h, cfg);
+        if (!setup || !setup.passesRR) continue;
+
+        usedZoneIds.add(z.id);
+        // Simulate forward from idx+1 to see if Pending -> Active -> TP/SL
+        let status = 'PENDING', openedTime = null;
+        for (let k = idx + 1; k < candles.length - 1; k++) {
+          const bar = candles[k];
+          if (status === 'PENDING') {
+            const invalid = setup.dir === 'BUY' ? bar.close < setup.sl : bar.close > setup.sl;
+            if (invalid) { status = 'CANCELLED'; break; }
+            const touched = setup.dir === 'BUY' ? (bar.low <= setup.entry && bar.high >= setup.entry) : (bar.high >= setup.entry && bar.low <= setup.entry);
+            if (touched) { status = 'ACTIVE'; openedTime = bar.time * 1000; }
+          } else if (status === 'ACTIVE') {
+            const slHit = setup.dir === 'BUY' ? bar.low <= setup.sl : bar.high >= setup.sl;
+            const tpHit = setup.dir === 'BUY' ? bar.high >= setup.tp1 : bar.low <= setup.tp1;
+            // Conservative rule: if both touched in same candle -> SL Hit
+            if (slHit || tpHit) {
+              const isWin = tpHit && !slHit;
+              const rMult = isWin ? Number(setup.rr.toFixed(2)) : -1.0;
+              if (isWin) wins++; else losses++;
+              netR += rMult;
+              btTrades.push({
+                id: 'BT_' + bar.time + '_' + z.id,
+                mode: 'BACKTEST',
+                tf,
+                session: Quant.getSession(bar.time).short,
+                dir: setup.dir,
+                grade: setup.grade,
+                entry: setup.entry,
+                sl: setup.sl,
+                tp1: setup.tp1,
+                tp2: setup.tp2,
+                rr: setup.rr,
+                riskUsd: setup.riskUsd,
+                zoneId: z.id,
+                zoneBottom: z.bottom,
+                zoneTop: z.top,
+                result: isWin ? 'WIN' : 'LOSS',
+                rMultiple: rMult,
+                pnlUsd: Number((rMult * setup.riskUsd).toFixed(2)),
+                openedAt: openedTime,
+                closedAt: bar.time * 1000
+              });
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    // Merge non-duplicate backtest trades into journal, then render each trade's own charts
+    const existingIds = new Set(state.journal.map(j => j.id));
+    const fresh = btTrades.filter(t => !existingIds.has(t.id));
+    fresh.forEach(t => {
+      state.journal.unshift(t);
+      putShots(t.id, { open: renderTradeChart(t, 'open'), close: renderTradeChart(t, 'close') });
+    });
+    persistJournal();
+    renderJournalTable();
+    renderStatsPage();
+
+    const total = wins + losses;
+    const wr = total ? ((wins / total) * 100).toFixed(1) : '0.0';
+    log(`[DONE] Backtest complete on ${tf.toUpperCase()} (R:R ≥ 1:${cfg.minRR}, HTF bias evaluated per-bar): ${total} trades (${wins}W / ${losses}L • ${wr}% WR • ${netR >= 0 ? '+' : ''}${netR.toFixed(2)}R)${fresh.length ? ` · ${fresh.length} new journal rows with reconstructed charts` : ''}. Check Journal & Stats tabs!`, '#10b981');
+  }
+
+  /* ---------------- 6. JOURNAL & STATS PERSISTENCE ---------------- */
+  /* localStorage now holds trade METADATA ONLY (a few hundred bytes per row).
+     Charts live in IndexedDB, so image bloat can no longer blow the ~5 MB
+     localStorage quota and silently lose the journal. */
+  function loadJournal() {
+    let parsed = [];
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      parsed = raw ? JSON.parse(raw) : [];
+      if (!Array.isArray(parsed)) parsed = [];
+    } catch (e) { parsed = []; }
+
+    // Migrate legacy v4 rows that embedded base64 screenshots inline
+    parsed.forEach(t => {
+      const legacyOpen = t.entryImg || '';
+      const legacyClose = t.exitImg || '';
+      if (legacyOpen || legacyClose) {
+        state.shotCache.set(t.id, { open: legacyOpen, close: legacyClose });
+        putShots(t.id, { open: legacyOpen, close: legacyClose });
+      }
+      delete t.entryImg;
+      delete t.exitImg;
+    });
+
+    state.journal = parsed;
+    $('navJournalCount').textContent = state.journal.length;
+  }
+
+  /* The armed/pending trade used to live only in memory, so refreshing the page (or a
+     reconnect) threw it away and it never reached the journal. It is now persisted. */
+  function persistActiveTrade() {
+    try {
+      if (state.activeTrade) localStorage.setItem(ACTIVE_KEY, JSON.stringify(state.activeTrade));
+      else localStorage.removeItem(ACTIVE_KEY);
+    } catch (e) {}
+  }
+
+  function restoreActiveTrade() {
+    try {
+      const raw = localStorage.getItem(ACTIVE_KEY);
+      if (!raw) return;
+      const tr = JSON.parse(raw);
+      if (!tr || !tr.entry || !Number.isFinite(tr.entry)) return;
+      const age = Date.now() - (tr.createdAt || 0);
+      if (age > 12 * 60 * 60 * 1000) { localStorage.removeItem(ACTIVE_KEY); return; }  // stale
+      state.activeTrade = tr;
+      log(`[RESTORE] ${tr.tf.toUpperCase()} ${tr.dir} ${tr.status} @ $${tr.entry.toFixed(2)} recovered after reload — still tracking.`, '#60a5fa');
+    } catch (e) {}
+  }
+
+  function journalMetaLine() {
+    const el = $('journalMeta');
+    if (!el) return;
+    const live = state.journal.filter(j => j.mode === 'LIVE').length;
+    const bt = state.journal.filter(j => j.mode === 'BACKTEST').length;
+    const canc = state.journal.filter(j => j.result === 'CANCELLED').length;
+    const closed = state.journal.filter(j => j.result === 'WIN' || j.result === 'LOSS').length;
+    const inflight = state.activeTrade ? ` · in-flight: 1 (${state.activeTrade.status})` : '';
+    el.textContent = `${state.journal.length} records · ${closed} closed (WIN/LOSS) · ${canc} cancelled · LIVE ${live} / BACKTEST ${bt}${inflight}`;
+  }
+
+  function persistJournal() {
+    const write = list => {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+        return true;
+      } catch (e) { return false; }
+    };
+    let list = state.journal.slice(0, 200);
+    let ok = write(list);
+    while (!ok && list.length > 1) {
+      list = list.slice(0, Math.max(1, Math.floor(list.length * 0.7)));
+      ok = write(list);
+    }
+    if (!ok) log('WARNING: browser storage full — journal is kept in memory only for this session.', '#f59e0b');
+    $('navJournalCount').textContent = state.journal.length;
+  }
+
+  function saveTradeToJournal(tr) {
+    delete tr.entryImg;
+    delete tr.exitImg;
+    state.journal.unshift(tr);
+    persistJournal();
+    renderJournalTable();
+    renderStatsPage();
+    // Charts for this specific trade, at this trade's TF and timestamps
+    putShots(tr.id, { open: renderTradeChart(tr, 'open'), close: renderTradeChart(tr, 'close') });
+  }
+
+  function renderJournalTable() {
+    journalMetaLine();
+    const resFlt = $('fltResult').value;
+    const tfFlt = $('fltTF').value;
+    const dirFlt = $('fltDir').value;
+    const srcFlt = $('fltSource').value;
+
+    const rows = state.journal.filter(t => {
+      if (resFlt !== 'ALL' && t.result !== resFlt) return false;
+      if (tfFlt !== 'ALL' && t.tf !== tfFlt) return false;
+      if (dirFlt !== 'ALL' && t.dir !== dirFlt) return false;
+      if (srcFlt !== 'ALL' && t.mode !== srcFlt) return false;
+      return true;
+    });
+
+    const tbody = $('journalTbody');
+    if (!rows.length) {
+      tbody.innerHTML = `<tr><td colspan="14" style="text-align:center;color:var(--text-muted);padding:24px;">No trade records match filters yet. Click "▶ Run Backtest (300 Bars)" in the top bar or wait for a live trade to close.</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = rows.map((t, idx) => {
+      const dt = new Date(t.closedAt || t.createdAt || Date.now()).toLocaleString();
+      const durMin = t.openedAt && t.closedAt ? Math.max(1, Math.round((t.closedAt - t.openedAt) / 60000)) + 'm' : '—';
+      const resClass = t.result === 'WIN' ? 'pill-buy' : t.result === 'LOSS' ? 'pill-sell' : 'pill-warn';
+      const dirClass = t.dir === 'BUY' ? 'pill-buy' : 'pill-sell';
+      return `<tr data-idx="${idx}">
+        <td class="mono">${dt}</td>
+        <td><span class="pill pill-neutral">${t.mode || 'LIVE'}</span></td>
+        <td class="mono">${(t.tf || '5m').toUpperCase()}</td>
+        <td>${t.session || '—'}</td>
+        <td><span class="pill ${dirClass}">${t.dir} ${t.grade || ''}</span></td>
+        <td class="mono">$${Number(t.entry).toFixed(2)}</td>
+        <td class="mono">$${Number(t.sl).toFixed(2)}</td>
+        <td class="mono">$${Number(t.tp1).toFixed(2)}</td>
+        <td class="mono">1:${Number(t.rr).toFixed(2)}</td>
+        <td><span class="pill ${resClass}">${t.result}</span></td>
+        <td class="mono" style="color:${t.rMultiple > 0 ? 'var(--buy)' : t.rMultiple < 0 ? 'var(--sell)' : 'var(--text-secondary)'};">${t.rMultiple > 0 ? '+' : ''}${t.rMultiple}R</td>
+        <td class="mono" style="color:${t.pnlUsd > 0 ? 'var(--buy)' : t.pnlUsd < 0 ? 'var(--sell)' : 'var(--text-secondary)'};">${t.pnlUsd >= 0 ? '+$' : '-$'}${Math.abs(t.pnlUsd || 0).toFixed(2)}</td>
+        <td class="mono">${durMin}</td>
+        <td><span class="pill pill-neutral">View</span></td>
+      </tr>`;
+    }).join('');
+
+    tbody.querySelectorAll('tr[data-idx]').forEach(trEl => {
+      trEl.addEventListener('click', () => {
+        const rec = rows[parseInt(trEl.getAttribute('data-idx'), 10)];
+        if (rec) openTradeModal(rec);
+      });
+    });
+  }
+
+  async function openTradeModal(t) {
+    $('modalTitle').textContent = `${t.dir} (${t.grade}) on ${(t.tf || '').toUpperCase()} — ${t.result} (${t.rMultiple > 0 ? '+' : ''}${t.rMultiple}R / ${t.pnlUsd >= 0 ? '+' : '-'}$${Math.abs(Number(t.pnlUsd) || 0).toFixed(2)})`;
+    $('modalMeta').innerHTML = `
+      <span class="pill pill-neutral">Entry: $${Number(t.entry).toFixed(2)}</span>
+      <span class="pill pill-sell">SL: $${Number(t.sl).toFixed(2)}</span>
+      <span class="pill pill-buy">TP1: $${Number(t.tp1).toFixed(2)}</span>
+      <span class="pill pill-neutral">R:R: 1:${Number(t.rr).toFixed(2)}</span>
+      <span class="pill pill-neutral">Session: ${t.session || '—'}</span>
+      <span class="pill pill-neutral">Zone: ${Number.isFinite(Number(t.zoneBottom)) ? '$' + num2(t.zoneBottom) + '–$' + num2(t.zoneTop) : 'n/a'}</span>
+      <span class="pill ${t.mode === 'BACKTEST' ? 'pill-warn' : 'pill-neutral'}">${t.mode || 'LIVE'}</span>
+    `;
+
+    // Clear stale images from the previously opened trade before loading the new pair
+    const imgOpen = $('modalImgOpen'), imgClose = $('modalImgClose');
+    const fbOpen = $('modalFbOpen'), fbClose = $('modalFbClose');
+    imgOpen.removeAttribute('src'); imgClose.removeAttribute('src');
+    imgOpen.style.display = ''; imgClose.style.display = '';
+    fbOpen.style.display = 'none'; fbClose.style.display = 'none';
+    $('tradeModal').classList.add('open');
+
+    const shots = await getShots(t.id);
+    const openSrc = (shots && shots.open) || renderTradeChart(t, 'open');
+    const closeSrc = (shots && shots.close) || renderTradeChart(t, 'close') || openSrc;
+
+    if (openSrc) imgOpen.src = openSrc; else { imgOpen.style.display = 'none'; fbOpen.style.display = ''; }
+    if (closeSrc) imgClose.src = closeSrc; else { imgClose.style.display = 'none'; fbClose.style.display = ''; }
+  }
+
+  /* RFC-4180 safe cell escaping — grades such as "SKIP (R:R < 1:2)" contain
+     commas and used to shift every column after them. */
+  const num2 = v => (Number.isFinite(Number(v)) ? Number(v).toFixed(2) : '—');
+
+  const csvCell = v => {
+    const s = v === null || v === undefined ? '' : String(v);
+    return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  };
+
+  function exportJournalCSV() {
+    if (!state.journal.length) {
+      log('Nothing to export yet — run a backtest or close a live trade first.', '#f59e0b');
+      return;
+    }
+    const headers = ['Date','Mode','TF','Session','Direction','Grade','Entry','SL','TP1','TP2','RR','Result','PnL_R','PnL_USD','ZoneBottom','ZoneTop'];
+    const lines = [headers.join(',')];
+    state.journal.forEach(t => {
+      lines.push([
+        new Date(t.closedAt || t.createdAt || Date.now()).toISOString(),
+        t.mode, t.tf, t.session, t.dir, t.grade,
+        num2(t.entry), num2(t.sl), num2(t.tp1), num2(t.tp2),
+        num2(t.rr), t.result, t.rMultiple, t.pnlUsd,
+        t.zoneBottom === undefined ? '' : num2(t.zoneBottom),
+        t.zoneTop === undefined ? '' : num2(t.zoneTop)
+      ].map(csvCell).join(','));
+    });
+    const blob = new Blob([lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `smc_xauusd_journal_${Date.now()}.csv`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  }
+
+  /* ---------------- 7. STATS & EQUITY CURVE ENGINE ---------------- */
+  function renderStatsPage() {
+    const cancelled = state.journal.filter(t => t.result === 'CANCELLED');
+    const closed = state.journal.filter(t => t.result === 'WIN' || t.result === 'LOSS').slice().reverse();
+    const cNote = $('statsEmptyNote');
+    if (cNote) {
+      if (!state.journal.length) {
+        cNote.textContent = 'No trades recorded yet — run a backtest, or press “Track Setup Now” and let the trade hit TP or SL.';
+      } else if (!closed.length) {
+        cNote.textContent = `${cancelled.length} setup(s) were cancelled before entry, so there is nothing to grade yet. Win rate and profit factor only count closed trades.`;
+      } else if (cancelled.length) {
+        cNote.textContent = `${cancelled.length} setup(s) cancelled before entry — excluded from win rate and profit factor.`;
+      } else {
+        cNote.textContent = '';
+      }
+    }
+    const wins = closed.filter(t => t.result === 'WIN');
+    const losses = closed.filter(t => t.result === 'LOSS');
+    const total = closed.length;
+    const wr = total ? (wins.length / total) * 100 : 0;
+
+    const grossWinR = wins.reduce((s, t) => s + t.rMultiple, 0);
+    const grossLossR = Math.abs(losses.reduce((s, t) => s + t.rMultiple, 0));
+    const pf = grossLossR > 0 ? (grossWinR / grossLossR) : grossWinR;
+    const avgRR = wins.length ? (grossWinR / wins.length) : 0;
+
+    let cumR = 0, peakR = 0, maxDDR = 0, cumUsd = 0;
+    const curve = [0];
+    closed.forEach(t => {
+      cumR += t.rMultiple;
+      cumUsd += (t.pnlUsd || 0);
+      if (cumR > peakR) peakR = cumR;
+      const dd = peakR - cumR;
+      if (dd > maxDDR) maxDDR = dd;
+      curve.push(cumR);
+    });
+
+    const bestR = closed.length ? Math.max(...closed.map(t => t.rMultiple)) : 0;
+    const worstR = closed.length ? Math.min(...closed.map(t => t.rMultiple)) : 0;
+
+    $('kpiWinRate').textContent = `${wr.toFixed(1)}%`;
+    $('kpiWinSub').textContent = `${wins.length} Wins / ${losses.length} Losses (${total} total)`;
+    $('kpiPF').textContent = pf.toFixed(2);
+    $('kpiAvgRR').textContent = `Avg Win: +${avgRR.toFixed(2)}R`;
+    $('kpiNetR').textContent = `${cumR >= 0 ? '+' : ''}${cumR.toFixed(2)}R`;
+    $('kpiNetR').style.color = cumR >= 0 ? 'var(--buy)' : 'var(--sell)';
+    $('kpiNetUsd').textContent = `${cumUsd >= 0 ? '+$' : '-$'}${Math.abs(cumUsd).toFixed(2)}`;
+    $('kpiMaxDD').textContent = `-${maxDDR.toFixed(2)}R`;
+    $('kpiBestWorst').textContent = `Best: +${bestR.toFixed(2)}R | Worst: ${worstR.toFixed(2)}R`;
+
+    drawEquityCurve(curve);
+
+    // Breakdown Table
+    const segments = [
+      { label: 'Timeframe: 5M', flt: t => t.tf === '5m' },
+      { label: 'Timeframe: 15M', flt: t => t.tf === '15m' },
+      { label: 'Direction: BUY (Demand)', flt: t => t.dir === 'BUY' },
+      { label: 'Direction: SELL (Supply)', flt: t => t.dir === 'SELL' },
+      { label: 'Session: London / KZ', flt: t => (t.session || '').includes('LONDON') },
+      { label: 'Session: New York / KZ', flt: t => (t.session || '').includes('NY') || (t.session || '').includes('NEW YORK') },
+      { label: 'Session: Asia', flt: t => (t.session || '').includes('ASIA') }
+    ];
+
+    $('breakdownTbody').innerHTML = segments.map(seg => {
+      const sub = closed.filter(seg.flt);
+      const sw = sub.filter(t => t.result === 'WIN').length;
+      const swr = sub.length ? ((sw / sub.length) * 100).toFixed(1) + '%' : '—';
+      const sr = sub.reduce((s, t) => s + t.rMultiple, 0);
+      const susd = sub.reduce((s, t) => s + (t.pnlUsd || 0), 0);
+      return `<tr>
+        <td><b>${seg.label}</b></td>
+        <td class="mono">${sub.length}</td>
+        <td class="mono">${swr}</td>
+        <td class="mono" style="color:${sr >= 0 ? 'var(--buy)' : 'var(--sell)'};">${sr >= 0 ? '+' : ''}${sr.toFixed(2)}R</td>
+        <td class="mono">${susd >= 0 ? '+$' : '-$'}${Math.abs(susd).toFixed(0)}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  function drawEquityCurve(pts) {
+    const c = $('equityCanvas');
+    if (!c) return;
+    const ctx = c.getContext('2d');
+    const w = c.width, h = c.height;
+    ctx.clearRect(0, 0, w, h);
+
+    const minV = Math.min(0, ...pts);
+    const maxV = Math.max(2, ...pts);
+    const pad = 28;
+    const plotW = w - pad * 2, plotH = h - pad * 2;
+    const toX = i => pad + (i / Math.max(1, pts.length - 1)) * plotW;
+    const toY = v => pad + ((maxV - v) / Math.max(1, maxV - minV)) * plotH;
+
+    // Zero baseline
+    const y0 = toY(0);
+    ctx.strokeStyle = '#1e293b';
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.moveTo(pad, y0); ctx.lineTo(w - pad, y0); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Equity line
+    ctx.strokeStyle = '#10b981';
+    ctx.lineWidth = 2.2;
+    ctx.beginPath();
+    pts.forEach((v, i) => {
+      const x = toX(i), y = toY(v);
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+  }
+
+  /* ---------------- 8. CHART & TRADINGVIEW POSITION TOOL OVERLAY ---------------- */
+  function initChart() {
+    chart = LightweightCharts.createChart($('chart'), {
+      autoSize: true,
+      layout: { background: { type: 'solid', color: '#787b86' }, textColor: '#0f172a', fontSize: 11, fontFamily: 'JetBrains Mono' },
+      grid: { vertLines: { color: 'rgba(255,255,255,0.08)' }, horzLines: { color: 'rgba(255,255,255,0.08)' } },
+      rightPriceScale: { borderColor: '#5f636e', scaleMargins: { top: 0.08, bottom: 0.2 } },
+      timeScale: { borderColor: '#5f636e', timeVisible: true, rightOffset: 10, barSpacing: 7 },
+      crosshair: { mode: LightweightCharts.CrosshairMode.Normal }
+    });
+
+    candleSeries = chart.addCandlestickSeries({
+      upColor: '#1e53e5', downColor: '#0a0a0a',
+      borderUpColor: '#1e53e5', borderDownColor: '#0a0a0a',
+      wickUpColor: '#1e53e5', wickDownColor: '#0a0a0a',
+      priceFormat: { type: 'price', precision: 2, minMove: 0.01 }
+    });
+
+    volSeries = chart.addHistogramSeries({
+      priceScaleId: 'vol', priceFormat: { type: 'volume' }, lastValueVisible: false, priceLineVisible: false
+    });
+    chart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.85, bottom: 0 } });
+
+    overlay = $('zoneOverlay');
+    octx = overlay.getContext('2d');
+    chart.timeScale().subscribeVisibleLogicalRangeChange(queueOverlayDraw);
+    window.addEventListener('resize', queueOverlayDraw);
+    new ResizeObserver(queueOverlayDraw).observe($('chartWrap'));
+  }
+
+  function xForTime(t) {
+    const ts = chart.timeScale();
+    const c = ts.timeToCoordinate(t);
+    if (c !== null && c !== undefined) return c;
+    const arr = state.candles[state.activeTF];
+    if (!arr || arr.length < 2) return null;
+    const n = arr.length;
+    const x1 = ts.logicalToCoordinate(n - 2), x2 = ts.logicalToCoordinate(n - 1);
+    if (x1 === null || x2 === null) return null;
+    return x2 + ((t - arr[n - 1].time) / TF_SEC[state.activeTF]) * (x2 - x1);
+  }
+
+  function queueOverlayDraw() {
+    if (drawQueued) return;
+    drawQueued = true;
+    requestAnimationFrame(() => { drawQueued = false; drawOverlay(); });
+  }
+
+  function drawOverlay() {
+    if (!overlay || !chart || !candleSeries) return;
+    const wrap = $('chartWrap');
+    const w = wrap.clientWidth, h = wrap.clientHeight;
+    if (!w || !h) return;
+    const dpr = window.devicePixelRatio || 1;
+    if (overlay.width !== Math.round(w * dpr) || overlay.height !== Math.round(h * dpr)) {
+      overlay.width = Math.round(w * dpr); overlay.height = Math.round(h * dpr);
+      overlay.style.width = w + 'px'; overlay.style.height = h + 'px';
+    }
+    octx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    octx.clearRect(0, 0, w, h);
+
+    let plotRight = w;
+    try { plotRight = w - chart.priceScale('right').width(); } catch (e) {}
+
+    const candles = state.candles[state.activeTF] || [];
+    const scan = state.analysis[state.activeTF] || state.analysis['15m'];
+    if (!scan) return;
+
+    // Everything below is clipped to the candle area (left of the price axis),
+    // exactly like a TradingView drawing layer.
+    octx.save();
+    octx.beginPath();
+    octx.rect(0, 0, Math.max(0, plotRight), h);
+    octx.clip();
+
+    // 1. Session Kill-Zone Shading
+    if ($('chkSessions').checked && (state.activeTF === '5m' || state.activeTF === '15m')) {
+      candles.forEach((c, idx) => {
+        if (idx === 0) return;
+        const sess = Quant.getSession(c.time);
+        if (sess.short.includes('KZ')) {
+          const x1 = xForTime(candles[idx - 1].time), x2 = xForTime(c.time);
+          if (x1 !== null && x2 !== null && x2 > x1) {
+            // Thin 3px ribbon at the top of the plot — no tint over the candles
+            octx.fillStyle = sess.short.includes('NY') ? 'rgba(16,185,129,0.55)' : 'rgba(59,130,246,0.55)';
+            octx.fillRect(x1, 0, x2 - x1, 3);
+          }
+        }
+      });
+    }
+
+    // 2. Supply & Demand Zones — outline only, with a small timeframe tag so you can
+    //    always tell which TF a zone came from. The active TF is drawn dashed; the
+    //    optional higher-TF overlay is drawn solid and thicker.
+    if ($('chkZones').checked) {
+      const showMit = $('chkMitigated').checked;
+      const price = state.livePrice != null ? state.livePrice : 0;
+      const TF_ORDER = ['5m', '15m', '1h', '4h'];
+      const aIdx = TF_ORDER.indexOf(state.activeTF);
+
+      const sources = [{ key: state.activeTF, htf: false }];
+      if ($('chkHtf') && $('chkHtf').checked && aIdx >= 0 && aIdx < TF_ORDER.length - 1) {
+        sources.push({ key: TF_ORDER[aIdx + 1], htf: true });
+      }
+
+      const setupZoneId = (state.currentSetup && state.currentSetup.zone) ? state.currentSetup.zone.id : null;
+
+      const drawZoneSet = (key, isHtf) => {
+        const sc = state.analysis[key];
+        if (!sc) return;
+        const zones = sc.supply.concat(sc.demand)
+          .filter(z => !(z.broken && !showMit))
+          .sort((a, b) => Math.abs(a.mid - price) - Math.abs(b.mid - price))
+          .slice(0, isHtf ? 4 : 6);
+
+        zones.forEach(z => {
+          const xStart = xForTime(z.startTime);
+          if (xStart === null) return;
+          const x1 = Math.max(0, xStart);
+          const x2 = z.broken ? Math.min(plotRight, xForTime(z.endTime) || plotRight) : plotRight;
+          if (x2 <= x1) return;
+
+          const yTop = candleSeries.priceToCoordinate(z.top);
+          const yBot = candleSeries.priceToCoordinate(z.bottom);
+          if (yTop === null || yBot === null) return;
+
+          const isSup = z.type === 'supply';
+          const hgt = Math.max(2, yBot - yTop);
+          const isSetupZone = z.id === setupZoneId;   // the zone the Signal card is talking about
+
+          octx.strokeStyle = isHtf
+            ? (isSup ? 'rgba(248,113,113,0.95)' : 'rgba(52,211,153,0.95)')
+            : isSetupZone
+              ? (isSup ? 'rgba(239,68,68,0.98)' : 'rgba(16,185,129,0.98)')
+              : (isSup ? 'rgba(239,68,68,0.62)' : 'rgba(16,185,129,0.62)');
+          octx.lineWidth = isSetupZone ? 2.4 : (isHtf ? 2.2 : 1.4);
+          octx.setLineDash(isHtf ? [] : (z.broken ? [3, 3] : [5, 4]));
+          octx.beginPath(); octx.moveTo(x1, yTop); octx.lineTo(x2, yTop); octx.stroke();
+          octx.beginPath(); octx.moveTo(x1, yTop + hgt); octx.lineTo(x2, yTop + hgt); octx.stroke();
+          octx.setLineDash([]);
+
+          // End caps mark the active setup zone without adding any text to the chart.
+          if (isSetupZone) {
+            octx.lineWidth = 1.6;
+            octx.beginPath();
+            octx.moveTo(x1, yTop - 4); octx.lineTo(x1, yTop + hgt + 4);
+            octx.stroke();
+          }
+
+          // ---- timeframe tag: "5M" / "15M" / "1H" / "4H" only ----
+          const tag = z.tf.toUpperCase();
+          octx.font = `700 ${isHtf ? 10 : 9}px "JetBrains Mono", monospace`;
+          const tw = octx.measureText(tag).width + (isHtf ? 10 : 8);
+          const th = isHtf ? 14 : 12;
+          const tagY = Math.min(Math.max(yTop + hgt / 2 - th / 2, 1), h - th - 1);
+          if (plotRight - x1 > tw + 6) {
+            octx.fillStyle = isHtf ? 'rgba(9,13,22,0.92)' : 'rgba(9,13,22,0.72)';
+            octx.fillRect(x1 + 1, tagY, tw, th);
+            octx.strokeStyle = octx.strokeStyle;
+            octx.lineWidth = 1;
+            octx.setLineDash([]);
+            octx.strokeRect(x1 + 1, tagY, tw, th);
+            octx.fillStyle = isSup ? '#fecaca' : '#a7f3d0';
+            octx.textAlign = 'left';
+            octx.textBaseline = 'middle';
+            octx.fillText(tag, x1 + (isHtf ? 6 : 5), tagY + th / 2 + 0.5);
+          }
+        });
+      };
+
+      sources.forEach(src => drawZoneSet(src.key, src.htf));
+    }
+
+    // 3. Swing High / Swing Low Dots
+    if ($('chkSwings').checked) {
+      scan.swings.slice(-9).forEach(s => {
+        const x = xForTime(s.time);
+        const y = candleSeries.priceToCoordinate(s.price);
+        if (x === null || y === null || x > plotRight) return;
+        octx.fillStyle = s.type === 'high' ? '#f87171' : '#34d399';
+        octx.beginPath(); octx.arc(x, y, 2.2, 0, Math.PI * 2); octx.fill();
+      });
+    }
+
+    // (Position tool overlay removed — TP/SL boxes, entry line and R:R tag are no longer
+    //  drawn on the chart. The trade plan lives in the side panel and status strip.)
+
+    // 4. Optional R:R projection maps (footer dot toggles) — off by default
+    drawRRMaps(octx, plotRight, h);
+
+    octx.restore();
+  }
+
+  /* ---------------- 8b. DEMAND / SUPPLY R:R PROJECTION MAPS ---------------- */
+  /* Opt-in chart drawings. Each footer dot projects one side of the book:
+       supply dot -> sell map (zone bottom = entry, stop above the zone top)
+       demand dot -> buy  map (zone top    = entry, stop below the zone bottom)
+     Reward is split at the user's rule: min target 1:2, max target 1:3. */
+  const RR_TARGETS = { min: 2.0, max: 3.0 };
+
+  /* How far (in R) price may be from the entry before a setup stops being actionable.
+     The auto-tracker already used 2.5R — the dashboard now judges with the same rule,
+     so a card can never promise a setup the engine would refuse to arm. */
+  const TRIGGER_RANGE_R = 2.5;
+
+  /* A setup is only a SIGNAL when price is actually at the zone: inside the band, or within
+     ZONE_LIVE_R of the entry. Everything else is a WATCH — the zone is drawn, but the card must
+     not claim a BUY/SELL you cannot take. */
+  const ZONE_LIVE_R = 0.5;
+
+  function setupActionability(s, price) {
+    if (!s || price == null) return { level: 'NONE', ok: false, live: false, distR: null, reason: 'no setup' };
+    const distR = Math.abs(price - s.entry) / (s.risk || 1);
+    const wrongSide = s.dir === 'BUY' ? price < s.entry : price > s.entry;
+    const zTop = Math.max(s.zone.top, s.zone.bottom), zBot = Math.min(s.zone.top, s.zone.bottom);
+    const inZone = price >= zBot - 0.05 && price <= zTop + 0.05;
+    // Price trading through the far side of the zone (beyond the stop side) kills the setup,
+    // but being anywhere INSIDE the band is still a valid fill — that is the entry region.
+    const beyondZone = s.dir === 'BUY' ? price < zBot - 0.05 : price > zTop + 0.05;
+    const live = !beyondZone && (inZone || (!wrongSide && distR <= ZONE_LIVE_R));
+    const ok = !wrongSide && distR <= TRIGGER_RANGE_R;      // auto-tracker may arm this early
+    const level = live ? 'LIVE' : beyondZone ? 'PAST' : ok ? 'WATCH' : 'FAR';
+    return {
+      level, ok, live, distR, wrongSide, inZone, beyondZone,
+      reason: live
+        ? (inZone ? 'price inside the zone' : `entry ${distR.toFixed(2)}R away`)
+        : beyondZone
+          ? `price broke through the ${s.dir} zone`
+          : `${distR.toFixed(2)}R away from entry`
+    };
+  }
+
+  function computeRRMap(side) {
+    const price = state.livePrice;
+    if (price == null) return null;
+    const isSup = side === 'supply';
+    const cfg = getCfg();
+
+    // Prefer the live setup's own zone when it matches this side (same numbers as the side panel).
+    let zone = null, tf = null;
+    const cur = state.currentSetup;
+    if (cur && cur.zone && cur.zone.type === side && !cur.zone.broken) {
+      zone = cur.zone; tf = cur.zone.tf;
+    }
+    if (!zone) {
+      // Both maps on screen must belong to ONE timeframe — the one you are viewing. Mixing a 1H
+      // supply band with a 5M demand projection reads like a bug, so there is no cross-TF fallback.
+      const sc = state.analysis[state.activeTF];
+      if (!sc) return null;
+      let best = null;
+      (isSup ? sc.supply : sc.demand).forEach(z => {
+        if (z.broken) return;
+        if (isSup && z.bottom < price - 1.5) return;   // supply sits at/above price
+        if (!isSup && z.top > price + 1.5) return;     // demand sits at/below price
+        const d = Math.abs(z.mid - price);
+        if (!best || d < best.d) best = { z, t: state.activeTF, d };
+      });
+      if (!best) return null;
+      zone = best.z; tf = best.t;
+    }
+
+    const isBuy = !isSup;
+    const entry = cfg.entryMode === 'mid' ? zone.mid : (isBuy ? zone.top : zone.bottom);
+    const sl = isBuy ? (zone.bottom - cfg.slBuf) : (zone.top + cfg.slBuf);
+    const risk = Math.abs(entry - sl);
+    if (!(risk > 0.05)) return null;
+    const sign = isBuy ? 1 : -1;
+
+    return {
+      side, tf, zone, dir: isBuy ? 'BUY' : 'SELL',
+      // The strategy's own R:R (structural target), when this zone is the live setup's zone.
+      planRR: (cur && cur.zone && cur.zone.id === zone.id) ? cur.rr : null,
+      entry, sl, risk,
+      tpMin: entry + sign * risk * RR_TARGETS.min,
+      tpMax: entry + sign * risk * RR_TARGETS.max,
+      startTime: zone.startTime
+    };
+  }
+
+  /* Two layers, matching the user's TradingView references:
+       1. the ZONE band  — thin, red for supply / green for demand, over the candles only
+       2. the R:R block  — the projection, in the reference position-tool palette
+                           (blue = reward, grey = risk, blue + black badges)            */
+  const RR_STYLE = {
+    supply: { fill: 'rgba(229,80,73,0.35)', line: 'rgb(128,25,34)', label: '#151515' },
+    demand: { fill: 'rgba(83,117,60,0.35)', line: 'rgb(76,175,80)', label: '#151515' }
+  };
+  const RR_TV = {
+    profit: 'rgba(41,98,255,0.20)',   // rgb(104,118,158) on this chart background
+    runner: 'rgba(41,98,255,0.10)',
+    risk: 'rgba(0,0,0,0.18)',
+    blue: '#2962ff',
+    black: '#0f0f0f',
+    white: '#ffffff'
+  };
+
+  function rrRoundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y); ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r); ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h); ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+  }
+
+  function drawRRMaps(ctx, plotRight, plotH) {
+    if (!state.rr) return;
+    // Projection lives in the empty space to the right of the last candle (the toggles widen that
+    // space), so the coloured zone band can sit over the candles without being covered.
+    const arr = state.candles[state.activeTF] || [];
+    let splitX = null;
+    if (arr.length) {
+      const c = chart.timeScale().logicalToCoordinate(arr.length);
+      if (c !== null && c !== undefined) splitX = c;
+    }
+    if (splitX === null || !isFinite(splitX)) splitX = plotRight - 250;
+    splitX = Math.round(Math.min(Math.max(splitX, plotRight * 0.45), plotRight - 150));
+    const maps = [], badges = [];
+
+    /* Pass 1 — geometry */
+    ['supply', 'demand'].forEach(side => {
+      if (!state.rr[side]) return;
+      const m = computeRRMap(side);
+      if (!m) return;
+      const xS = xForTime(m.startTime);
+      if (xS === null) return;
+
+      const yEntry = candleSeries.priceToCoordinate(m.entry);
+      const ySL = candleSeries.priceToCoordinate(m.sl);
+      const yMin = candleSeries.priceToCoordinate(m.tpMin);
+      const yMax = candleSeries.priceToCoordinate(m.tpMax);
+      const zTop = candleSeries.priceToCoordinate(m.zone.top);
+      const zBot = candleSeries.priceToCoordinate(m.zone.bottom);
+      if ([yEntry, ySL, yMin, yMax, zTop, zBot].some(v => v === null || v === undefined)) return;
+      if (yEntry < -40 || yEntry > plotH + 40) return;   // entry far off-screen — skip
+
+      maps.push({ side, m, xS, yEntry, ySL, yMin, yMax, zTop, zBot });
+    });
+    if (!maps.length) return;
+
+    /* Pass 2 — the zone band: thin, coloured, only over the candles */
+    maps.forEach(map => {
+      const { side, m, xS, yEntry, zTop, zBot } = map;
+      const st = RR_STYLE[side];
+      const x1 = Math.max(0, xS), x2 = Math.min(splitX, plotRight - 1);
+      if (x2 - x1 < 12) return;
+
+      const top = Math.min(zTop, zBot);
+      const h = Math.max(2, Math.abs(zBot - zTop));
+      ctx.setLineDash([]);
+      ctx.fillStyle = st.fill;
+      ctx.fillRect(x1, top, x2 - x1, h);
+
+      // entry line + label, exactly like the reference drawing
+      const label = `${m.tf.toUpperCase()} ${side === 'supply' ? 'Supply' : 'Demand'}`;
+      ctx.font = '600 11px Inter, system-ui, -apple-system, sans-serif';
+      const lw = ctx.measureText(label).width;
+      const lx = x1 + 8;   // left-aligned: keeps it clear of the projection badges
+      const gapL = lx - 8, gapR = lx + lw + 8;
+
+      ctx.strokeStyle = st.line;
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(x1, yEntry); ctx.lineTo(Math.max(x1, gapL), yEntry); ctx.stroke();
+      if (gapR < x2) { ctx.beginPath(); ctx.moveTo(gapR, yEntry); ctx.lineTo(x2, yEntry); ctx.stroke(); }
+
+      if (x2 - x1 > lw + 22) {   // only when the band is wide enough to hold the text
+        ctx.fillStyle = st.label;
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(label, lx, yEntry + 0.5);
+      }
+    });
+
+    /* Pass 3 — the R:R projection block, position-tool palette */
+    const priceNow = state.livePrice;
+    const primary = maps.slice().sort((a, b2) =>
+      Math.abs(a.m.entry - priceNow) - Math.abs(b2.m.entry - priceNow))[0];
+    maps.forEach(map => {
+      const isPrimary = map === primary;
+      const { m, yEntry, ySL, yMin, yMax } = map;
+      const x1 = Math.min(splitX + 1, plotRight - 30), x2 = plotRight - 1;
+      if (x2 - x1 < 20) return;
+
+      const band = (ya, yb) => ({ top: Math.min(ya, yb), h: Math.max(1.2, Math.abs(yb - ya)) });
+
+      // risk (grey) -> reward (blue) -> runner (lighter blue)
+      let b = band(yEntry, ySL);
+      ctx.fillStyle = RR_TV.risk; ctx.fillRect(x1, b.top, x2 - x1, b.h);
+
+      b = band(yEntry, yMin);
+      ctx.fillStyle = RR_TV.profit; ctx.fillRect(x1, b.top, x2 - x1, b.h);
+
+      b = band(yMin, yMax);
+      ctx.fillStyle = RR_TV.runner; ctx.fillRect(x1, b.top, x2 - x1, b.h);
+
+      // entry line (dashed, like the crosshair line in the reference)
+      ctx.setLineDash([3, 3]);
+      ctx.strokeStyle = 'rgba(15,23,42,0.55)';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(x1, yEntry); ctx.lineTo(x2, yEntry); ctx.stroke();
+
+      // target + stop lines
+      ctx.setLineDash([]);
+      ctx.strokeStyle = 'rgba(41,98,255,0.85)';
+      ctx.beginPath(); ctx.moveTo(x1, yMin); ctx.lineTo(x2, yMin); ctx.stroke();
+      ctx.setLineDash([4, 3]);
+      ctx.strokeStyle = 'rgba(41,98,255,0.55)';
+      ctx.beginPath(); ctx.moveTo(x1, yMax); ctx.lineTo(x2, yMax); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.strokeStyle = 'rgba(15,15,15,0.60)';
+      ctx.beginPath(); ctx.moveTo(x1, ySL); ctx.lineTo(x2, ySL); ctx.stroke();
+
+      // Badges only on the map closest to price. With both dots on, eight badges interleave and
+      // the block becomes unreadable — the secondary map keeps its fills, lines and zone label.
+      if (!isPrimary) return;
+      const cfg = getCfg();
+      const riskUsd = cfg.balance * (cfg.riskPct / 100);
+      const rrTxt = m.planRR ? `R:R 1:${m.planRR.toFixed(2)}` : `1R = $${Math.round(riskUsd)}`;
+      badges.push({ text: `Target 1:2 · $${m.tpMin.toFixed(2)} · +$${Math.round(riskUsd * 2)}`, y: yMin, bg: RR_TV.blue, fg: RR_TV.white, x: x1 + 5 });
+      badges.push({ text: `Entry $${m.entry.toFixed(2)} · ${rrTxt}`, y: yEntry, bg: RR_TV.blue, fg: RR_TV.white, x: x1 + 5 });
+      badges.push({ text: `Stop $${m.sl.toFixed(2)} · −$${Math.round(riskUsd)}`, y: ySL, bg: RR_TV.black, fg: RR_TV.white, x: x1 + 5 });
+      if (Math.abs(yMax - yMin) > 20) {
+        badges.push({ text: `1:3 · $${m.tpMax.toFixed(2)} · +$${Math.round(riskUsd * 3)}`, y: yMax, bg: 'rgba(41,98,255,0.75)', fg: RR_TV.white, x: x1 + 5 });
+      }
+    });
+
+    /* Pass 4 — badges, de-collided so they never stack */
+    badges.sort((a, b) => a.y - b.y);
+    let lastY = -100;
+    badges.forEach(bd => {
+      let y = Math.min(Math.max(bd.y, 10), plotH - 10);
+      if (y - lastY < 18) y = Math.min(lastY + 18, plotH - 10);
+      lastY = y;
+      ctx.font = '600 9.5px "JetBrains Mono", monospace';
+      const w = ctx.measureText(bd.text).width + 12;
+      const x = Math.min(bd.x, plotRight - w - 3);
+      ctx.fillStyle = bd.bg;
+      rrRoundRect(ctx, x, y - 8, w, 16, 3);
+      ctx.fill();
+      ctx.fillStyle = bd.fg;
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(bd.text, x + 6, y + 0.5);
+    });
+  }
+
+  function rrEnsureRoom(on) {
+    try { chart.timeScale().applyOptions({ rightOffset: on ? 44 : 10 }); } catch (e) {}
+  }
+
+  function toggleRR(side) {
+    if (!state.rr) state.rr = { demand: false, supply: false };
+    const btn = $(side === 'demand' ? 'btnDemandRR' : 'btnSupplyRR');
+    const label = side === 'demand' ? 'Demand (buy)' : 'Supply (sell)';
+    const color = side === 'demand' ? '#10b981' : '#ef4444';
+
+    if (!state.rr[side]) {
+      const m = computeRRMap(side);
+      if (!m) {
+        log(`No usable ${side} zone on ${state.activeTF.toUpperCase()} — ${label} R:R map needs a ${side} zone on this timeframe.`, '#f59e0b');
+        return;
+      }
+      state.rr[side] = true;
+      if (btn) btn.classList.add('on');
+      rrEnsureRoom(true);
+      log(`${label} R:R map ON — ${m.tf.toUpperCase()} zone | entry $${m.entry.toFixed(2)} | SL $${m.sl.toFixed(2)} ` +
+          `| min 1:2 $${m.tpMin.toFixed(2)} → max 1:3 $${m.tpMax.toFixed(2)}`, color);
+    } else {
+      state.rr[side] = false;
+      if (btn) btn.classList.remove('on');
+      if (!state.rr.demand && !state.rr.supply) rrEnsureRoom(false);
+      log(`${label} R:R map OFF — overlay removed.`);
+    }
+    queueOverlayDraw();
+  }
+
+  /* ---------------- 9. LIVE DATA STREAM & DASHBOARD UPDATES ---------------- */
+  async function calibrateSpot() {
+    try {
+      const [sRes, pRes] = await Promise.all([
+        fetch(SPOT_URL).then(r => r.json()),
+        fetch(PAXG_URL).then(r => r.json())
+      ]);
+      if (sRes && sRes.price && pRes && pRes.price) {
+        const spot = parseFloat(sRes.price), paxg = parseFloat(pRes.price);
+        const diff = spot - paxg;
+        if (Math.abs(diff) < 300) state.spotOffset = diff;
+        const totalOff = state.spotOffset + getCfg().extraOffset;
+        $('bannerOffset').textContent = (totalOff >= 0 ? '+' : '') + totalOff.toFixed(2);
+        $('stSpotSub').textContent = `Spot: $${spot.toFixed(2)} | PAXG: $${paxg.toFixed(2)}`;
+      }
+    } catch (e) {}
+  }
+
+  async function fetchTF(tf, limit = 300) {
+    const totalOff = state.spotOffset + getCfg().extraOffset;
+    const res = await fetch(`${REST_KLINES}?symbol=PAXGUSDT&interval=${tf}&limit=${limit}`);
+    const raw = await res.json();
+    return raw.map(k => ({
+      time: Math.floor(k[0] / 1000),
+      open: parseFloat(k[1]) + totalOff,
+      high: parseFloat(k[2]) + totalOff,
+      low: parseFloat(k[3]) + totalOff,
+      close: parseFloat(k[4]) + totalOff,
+      volume: parseFloat(k[5])
+    }));
+  }
+
+  async function syncAllData() {
+    await calibrateSpot();
+    const res = await Promise.all(['4h', '1h', '15m', '5m'].map(tf => fetchTF(tf, 300).catch(() => null)));
+    if (!res.some(Boolean)) {
+      $('connDot').className = 'status-dot offline';
+      $('connText').textContent = 'Offline';
+      $('chartLoader').style.display = '';
+      $('chartLoader').innerHTML = `
+        <div style="max-width:520px;padding:24px;text-align:center;">
+          <div style="font-size:13px;font-weight:700;color:var(--sell);margin-bottom:8px;">Live feed unreachable</div>
+          <div style="font-size:11.5px;line-height:1.65;color:var(--text-secondary);">
+            Could not reach <code>data-api.binance.vision</code> or <code>api.gold-api.com</code>.
+            This terminal needs a direct internet connection, and will not load inside an offline
+            or sandboxed preview frame.
+          </div>
+          <button class="btn btn-primary" style="margin-top:12px;" onclick="location.reload()">↻ Retry</button>
+        </div>`;
+      log('ERROR: live data feed unreachable — check your connection or open this file outside a sandboxed frame.', '#ef4444');
+      return false;
+    }
+    ['4h', '1h', '15m', '5m'].forEach((tf, i) => { if (res[i]) state.candles[tf] = res[i]; });
+    state.restConnected = true;
+    $('chartLoader').style.display = 'none';
+    renderChartSeries();
+    runFullAnalysis();
+    return true;
+  }
+
+  function renderChartSeries() {
+    const arr = state.candles[state.activeTF] || [];
+    if (!arr.length) return;
+    candleSeries.setData(arr.map(c => ({ time: c.time, open: c.open, high: c.high, low: c.low, close: c.close })));
+    volSeries.setData(arr.map(c => ({
+      time: c.time, value: c.volume,
+      color: c.close >= c.open ? 'rgba(30,83,229,0.5)' : 'rgba(10,10,10,0.5)'
+    })));
+    queueOverlayDraw();
+  }
+
+  function runFullAnalysis() {
+    state.bias4h = Quant.computeHTFBias(state.candles['4h']);
+    state.bias1h = Quant.computeHTFBias(state.candles['1h']);
+    state.analysis['4h'] = Quant.scanTimeframe(state.candles['4h'], '4h');
+    state.analysis['1h'] = Quant.scanTimeframe(state.candles['1h'], '1h');
+    state.analysis['15m'] = Quant.scanTimeframe(state.candles['15m'], '15m');
+    state.analysis['5m'] = Quant.scanTimeframe(state.candles['5m'], '5m');
+
+    const activeCandles = state.candles[state.activeTF];
+    const latest = activeCandles && activeCandles.length ? activeCandles[activeCandles.length - 1] : null;
+    if (latest) state.livePrice = latest.close;
+
+    // The Signal card always describes the timeframe you are LOOKING AT, so a 4H chart can never
+    // show a 5M zone. The setup is built from that TF's own zones and swings.
+    const scanTF = state.activeTF;
+    const scan = state.analysis[scanTF];
+    // Opposing zones from every timeframe stay available as structural TP candidates.
+    const allZones = ['5m', '15m', '1h', '4h'].reduce((acc, t) => {
+      const sc = state.analysis[t];
+      return sc ? acc.concat(sc.supply, sc.demand) : acc;
+    }, []);
+
+    if (scan && state.livePrice != null) {
+      const cfg = getCfg();
+      const fresh = scan.supply.concat(scan.demand).filter(z => !z.broken);
+      fresh.sort((a, b) => Math.abs(a.mid - state.livePrice) - Math.abs(b.mid - state.livePrice));
+      const setups = fresh.map(z => Quant.buildSwingSetup(z, allZones, scan.swings, state.bias4h, state.bias1h, cfg)).filter(Boolean);
+      state.currentSetup = setups.find(s => s.passesRR) || setups[0] || null;
+    }
+
+    if (latest) evaluateTradeLifecycle(latest);
+    updateDashboardUI();
+    queueOverlayDraw();
+  }
+
+  function updateDashboardUI() {
+    const p = state.livePrice;
+    if (p != null) $('stPrice').textContent = '$' + p.toFixed(2);
+    $('stTfPill').textContent = state.activeTF.toUpperCase();
+
+    // Bias card
+    const b4 = state.bias4h.bias, b1 = state.bias1h.bias;
+    const bPill = $('stBiasPill');
+    if (b4 === 'BULLISH' && b1 === 'BULLISH') { bPill.textContent = 'BULLISH (4H+1H)'; bPill.className = 'pill pill-buy'; }
+    else if (b4 === 'BEARISH' && b1 === 'BEARISH') { bPill.textContent = 'BEARISH (4H+1H)'; bPill.className = 'pill pill-sell'; }
+    else { bPill.textContent = `4H ${b4} / 1H ${b1}`; bPill.className = 'pill pill-warn'; }
+
+    // Session card
+    const sess = Quant.getSession();
+    $('stSessionPill').textContent = sess.short;
+    $('stSessionPill').className = 'pill ' + (sess.short.includes('KZ') ? 'pill-buy' : 'pill-neutral');
+    $('stSessionSub').textContent = sess.name;
+    $('utcClock').textContent = new Date().toUTCString().slice(17, 25) + ' UTC';
+
+    // Setup & R:R cards
+    const s = state.currentSetup;
+    const cfg = getCfg();
+
+    if (s) {
+      const sigPill = $('stSignalPill'), grPill = $('stGradePill'), rrPill = $('stRRFilterPill');
+      const setupTF = (s.zone && s.zone.tf ? s.zone.tf : state.activeTF).toUpperCase();
+      const act = setupActionability(s, p);
+      if (!s.passesRR) {
+        sigPill.textContent = `${setupTF} ${s.dir} SKIP`;
+        sigPill.title = `${setupTF} setup fails the R:R filter`;
+        sigPill.className = 'pill pill-neutral';
+      } else if (act.live) {
+        sigPill.textContent = `${setupTF} ${s.dir} SETUP`;
+        sigPill.title = `${setupTF} ${s.zone.type} zone · price at the zone`;
+        sigPill.className = 'pill ' + (s.dir === 'BUY' ? 'pill-buy' : 'pill-sell');
+      } else {
+        // Price is not at the zone -> there is no signal to take. Show WAIT, not a BUY/SELL.
+        sigPill.textContent = `WAIT · ${setupTF} ${s.dir} ZONE`;
+        sigPill.title = `No signal — ${act.reason}. Waiting for price to reach the ${s.dir} zone.`;
+        sigPill.className = 'pill pill-neutral';
+      }
+      grPill.textContent = !s.passesRR ? 'Grade SKIP' : (act.live ? `Grade ${s.grade}` : `Grade ${s.grade} (zone)`);
+      grPill.className = 'pill ' + (!s.passesRR ? 'pill-warn' : act.live ? (s.grade.startsWith('A') ? 'pill-buy' : 'pill-warn') : 'pill-neutral');
+
+      $('stRRVal').textContent = `1 : ${s.rr.toFixed(2)}`;
+      const rrCardLbl = $('stSetupTfTag');
+      if (rrCardLbl) { rrCardLbl.textContent = setupTF; }
+      rrPill.textContent = !s.passesRR
+        ? 'SKIP (<1:' + cfg.minRR + ')'
+        : (act.live ? 'PASS (≥1:' + cfg.minRR + ')' : 'WATCH · 1:' + s.rr.toFixed(2));
+      rrPill.className = 'pill ' + (!s.passesRR ? 'pill-sell' : act.live ? 'pill-buy' : 'pill-neutral');
+      $('stTargetsSub').textContent = `${setupTF} · TP1: $${s.tp1.toFixed(1)} (${s.tp1Src}) | TP2: $${s.tp2.toFixed(1)}`;
+
+      // Side Panel Details
+      $('pDirGrade').textContent = act.live ? `${s.dir} (${s.grade}) · ${setupTF}` : `${s.dir} PLAN · ${setupTF}`;
+      $('pDirGrade').style.color = act.live ? (s.dir === 'BUY' ? 'var(--buy)' : 'var(--sell)') : 'var(--text-muted)';
+      $('pEntry').textContent = '$' + s.entry.toFixed(2);
+      $('pSL').textContent = '$' + s.sl.toFixed(2);
+      $('pTP1').textContent = '$' + s.tp1.toFixed(2);
+      $('pTP2').textContent = '$' + s.tp2.toFixed(2);
+      $('pRR').textContent = `1 : ${s.rr.toFixed(2)}`;
+      $('pLots').textContent = `${s.lots.toFixed(2)} Lots`;
+      $('pUsd').textContent = `-$${s.riskUsd.toFixed(0)} / +$${s.rewardUsd.toFixed(0)}`;
+
+      $('gcBias').textContent = s.checks.bothHtfAligned ? '✓ 4H+1H Match' : s.checks.htfAligned ? '✓ Partial' : '✕ Counter';
+      $('gcFresh').textContent = s.checks.isFresh ? '✓ Fresh Zone' : '⚠ Retested';
+      $('gcVol').textContent = s.checks.hasVol ? '✓ Vol > SMA20' : '— Standard';
+      $('gcSweep').textContent = s.checks.swept ? '✓ Swept Swing' : '— Internal';
+      $('gcRR').textContent = s.checks.passesRR ? `✓ 1:${s.rr.toFixed(2)} Pass` : `✕ 1:${s.rr.toFixed(2)} Skip`;
+      const sideNote = act.live
+        ? (act.inZone ? `price inside the zone · ${s.dir} entry live` : `price at entry · take the ${s.dir}`)
+        : (act.beyondZone
+            ? `price broke the zone — setup dead, waiting for a new one`
+            : `${act.distR.toFixed(2)}R from entry — no signal until price reaches $${s.entry.toFixed(2)}`);
+      $('stSignalSub').textContent = `${setupTF} ${s.zone.type} @ $${(s.zone.mid).toFixed(2)} · ${sideNote}`;
+
+      // ---- FILTERED card: shown whenever the nearest setup fails the R:R filter ----
+      const fc = $('filterCard');
+      if (!s.passesRR) {
+        fc.hidden = false;
+        $('fcTag').textContent = 'FILTERED';
+        $('fcRR').textContent = `R:R ${s.rr.toFixed(2)} < 1:${cfg.minRR}`;
+        $('fcPrices').textContent =
+          `Entry ${s.entry.toFixed(2)}   SL ${s.sl.toFixed(2)}   TP1 ${s.tp1.toFixed(2)}`;
+        $('fcReason').textContent =
+          `${s.dir} ${s.zone.tf.toUpperCase()} ${s.zone.type} setup skipped — R:R ${s.rr.toFixed(2)} is below the 1:${cfg.minRR} minimum (weak setup).`;
+        $('fcPill').textContent = 'SKIPPED';
+        $('fcPill').className = 'pill pill-sell fc-pill';
+        if (state.lastFilteredZoneId !== s.zone.id) {
+          state.lastFilteredZoneId = s.zone.id;
+          log(`FILTERED — R:R ${s.rr.toFixed(2)} < 1:${cfg.minRR} — Entry ${s.entry.toFixed(2)} SL ${s.sl.toFixed(2)} TP1 ${s.tp1.toFixed(2)} (${s.dir} ${s.zone.tf.toUpperCase()} skipped, weak setup)`, '#f87171');
+        }
+      } else {
+        fc.hidden = true;
+        state.lastFilteredZoneId = null;
+      }
+    } else {
+      // No qualifying setup right now — clear the panel instead of leaving the last
+      // setup's prices on screen as if they were still valid.
+      ['pDirGrade', 'pEntry', 'pSL', 'pTP1', 'pTP2', 'pRR', 'pLots', 'pUsd'].forEach(id => { $(id).textContent = '—'; });
+      ['gcBias', 'gcFresh', 'gcVol', 'gcSweep', 'gcRR'].forEach(id => { $(id).textContent = '—'; });
+      $('pDirGrade').style.color = '';
+      $('stSignalPill').textContent = 'WAIT';
+      $('stSignalPill').className = 'pill pill-neutral';
+      $('stGradePill').textContent = '—';
+      $('stGradePill').className = 'pill pill-neutral';
+      $('stRRVal').textContent = '—';
+      $('stRRFilterPill').textContent = 'IDLE';
+      $('stRRFilterPill').className = 'pill pill-neutral';
+      $('stTargetsSub').textContent = 'No qualified zone on this timeframe';
+      $('stSignalSub').textContent = `Scanning ${state.activeTF.toUpperCase()} · Min 1:${cfg.minRR} R:R filter`;
+      const fcNone = $('filterCard');
+      fcNone.hidden = false;
+      $('fcTag').textContent = 'NO SETUP';
+      $('fcRR').textContent = `R:R — (min 1:${cfg.minRR})`;
+      $('fcPrices').textContent = 'No unmitigated zone near price on this timeframe';
+      $('fcReason').textContent = 'Waiting for a fresh supply/demand zone to form.';
+      $('fcPill').textContent = 'WAITING';
+      $('fcPill').className = 'pill pill-neutral fc-pill';
+    }
+
+    // Active Trade State Card
+    const tr = state.activeTrade;
+    const trPill = $('stTradeStatePill');
+    const sideBadge = $('sideTradeBadge');
+    if (tr) {
+      trPill.textContent = `${tr.tf ? tr.tf.toUpperCase() + ' ' : ''}${tr.status}: ${tr.dir} @ $${tr.entry.toFixed(2)}`;
+      trPill.className = 'pill ' + (tr.status === 'ACTIVE' ? (tr.dir === 'BUY' ? 'pill-buy' : 'pill-sell') : 'pill-warn');
+      sideBadge.textContent = tr.status;
+      sideBadge.className = trPill.className;
+      if (tr.status === 'ACTIVE' && p != null) {
+        const curR = ((tr.dir === 'BUY' ? p - tr.entry : tr.entry - p) / Math.abs(tr.entry - tr.sl));
+        $('stTradePnlSub').textContent = `Floating: ${curR >= 0 ? '+' : ''}${curR.toFixed(2)}R | SL $${tr.sl.toFixed(1)} → TP1 $${tr.tp1.toFixed(1)}`;
+      } else {
+        $('stTradePnlSub').textContent = `Waiting for price to touch $${tr.entry.toFixed(2)}…`;
+      }
+    } else {
+      trPill.textContent = 'NO ACTIVE TRADE';
+      trPill.className = 'pill pill-neutral';
+      sideBadge.textContent = 'IDLE';
+      sideBadge.className = 'pill pill-neutral';
+      $('stTradePnlSub').textContent = 'Auto-tracks when R:R ≥ 1:2 setup forms';
+    }
+
+    // Active Zones Sidebar List
+    const tfKeys = Array.from(new Set([state.activeTF, '5m', '15m']));
+    const allFresh = tfKeys.reduce((acc, t) => {
+      const sc = state.analysis[t];
+      if (!sc) return acc;
+      const list = sc.supply.concat(sc.demand).filter(z => !z.broken);
+      return acc.concat(list.filter(z => !acc.some(x => x.id === z.id)));
+    }, []);
+    $('sideZoneCount').textContent = allFresh.length;
+    const countZones = t => {
+      const sc = state.analysis[t];
+      return sc ? sc.supply.concat(sc.demand).filter(z => !z.broken).length : 0;
+    };
+    $('chartZoneSummary').textContent =
+      `${state.activeTF.toUpperCase()} Zones: ${countZones(state.activeTF)} | 5M: ${countZones('5m')} | 15M: ${countZones('15m')}`;
+    $('sideZoneList').innerHTML = allFresh.slice().reverse().map(z => `
+      <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border-subtle);">
+        <span style="color:${z.type === 'supply' ? 'var(--sell)' : 'var(--buy)'};font-weight:700;">${z.tf.toUpperCase()} ${z.type.toUpperCase()}</span>
+        <span>$${z.bottom.toFixed(2)} – $${z.top.toFixed(2)}</span>
+        <span style="color:var(--text-muted);">${z.rule}</span>
+      </div>
+    `).join('') || 'No unmitigated zones.';
+  }
+
+  /* ---------------- 10. WEBSOCKET STREAM ---------------- */
+  let ws = null, wsRetry = 0;
+  function connectWS() {
+    try { if (ws) ws.close(); } catch (e) {}
+    ws = new WebSocket(WS_STREAM);
+    ws.onopen = () => {
+      state.wsConnected = true;
+      wsRetry = 0;
+      $('connDot').className = 'status-dot online';
+      $('connText').textContent = 'Live Stream';
+    };
+    ws.onmessage = ev => {
+      try {
+        const msg = JSON.parse(ev.data);
+        const k = msg.data && msg.data.k;
+        if (!k) return;
+        const tf = msg.stream.split('@')[1].replace('kline_', '');
+        const arr = state.candles[tf];
+        if (!arr || !arr.length) return;
+        const totalOff = state.spotOffset + getCfg().extraOffset;
+        const bar = {
+          time: Math.floor(k.t / 1000),
+          open: parseFloat(k.o) + totalOff,
+          high: parseFloat(k.h) + totalOff,
+          low: parseFloat(k.l) + totalOff,
+          close: parseFloat(k.c) + totalOff,
+          volume: parseFloat(k.v)
+        };
+        const last = arr[arr.length - 1];
+        if (bar.time === last.time) arr[arr.length - 1] = bar;
+        else if (bar.time > last.time) { arr.push(bar); if (arr.length > 350) arr.shift(); }
+
+        if (tf === state.activeTF) {
+          candleSeries.update({ time: bar.time, open: bar.open, high: bar.high, low: bar.low, close: bar.close });
+          volSeries.update({ time: bar.time, value: bar.volume, color: bar.close >= bar.open ? 'rgba(30,83,229,0.5)' : 'rgba(10,10,10,0.5)' });
+        }
+        state.livePrice = bar.close;
+        runFullAnalysis();
+      } catch (e) {}
+    };
+    ws.onclose = () => {
+      state.wsConnected = false;
+      $('connDot').className = 'status-dot';
+      $('connText').textContent = wsRetry > 3 ? 'Reconnecting (backoff)…' : 'Reconnecting…';
+      const delay = Math.min(60000, 2000 * Math.pow(1.7, wsRetry++));
+      setTimeout(connectWS, delay);
+    };
+  }
+
+  /* ---------------- 11. EVENT BINDINGS & BOOT ---------------- */
+  function bindEvents() {
+    // Top Navigation Tabs
+    document.querySelectorAll('.nav-tab').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const tab = btn.getAttribute('data-tab');
+        document.querySelectorAll('.nav-tab').forEach(b => b.classList.toggle('active', b === btn));
+        document.querySelectorAll('.view-page').forEach(v => v.classList.toggle('active', v.id === 'view-' + tab));
+        if (tab === 'journal') renderJournalTable();
+        if (tab === 'stats') renderStatsPage();
+        if (tab === 'dashboard') queueOverlayDraw();
+      });
+    });
+
+    // Timeframe Buttons
+    document.querySelectorAll('.tf-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        state.activeTF = btn.getAttribute('data-tf');
+        document.querySelectorAll('.tf-btn').forEach(b => b.classList.toggle('active', b === btn));
+        renderChartSeries();
+        runFullAnalysis();
+      });
+    });
+
+    ['chkZones', 'chkHtf', 'chkSwings', 'chkSessions', 'chkMitigated'].forEach(id => {
+      $(id).addEventListener('change', queueOverlayDraw);
+    });
+
+    // R:R projection map dots (footer) — click = draw, click again = remove
+    $('btnDemandRR').addEventListener('click', () => toggleRR('demand'));
+    $('btnSupplyRR').addEventListener('click', () => toggleRR('supply'));
+
+    ['setBalance', 'setRiskPct', 'setEntryMode', 'setSlBuf', 'setMinRR', 'setExtraOffset'].forEach(id => {
+      $(id).addEventListener('change', () => { syncAllData(); });
+    });
+
+    $('btnSync').addEventListener('click', () => { log('Manual sync triggered…'); syncAllData(); });
+    $('btnBacktest').addEventListener('click', runHistoricalBacktest);
+    $('btnForceTrack').addEventListener('click', () => {
+      if (state.currentSetup) {
+        state.settledZoneIds.delete(state.currentSetup.zone.id); // manual override
+        armTradeFromSetup(state.currentSetup, true);
+      } else {
+        log('No setup to track right now — wait for a qualifying zone.', '#f59e0b');
+      }
+    });
+    $('btnCancelTrack').addEventListener('click', () => {
+      state.activeTrade = null;
+      persistActiveTrade();
+      updateDashboardUI();
+      queueOverlayDraw();
+    });
+
+    ['fltResult', 'fltTF', 'fltDir', 'fltSource'].forEach(id => $(id).addEventListener('change', renderJournalTable));
+    $('btnExportCSV').addEventListener('click', exportJournalCSV);
+    $('btnClearJournal').addEventListener('click', () => {
+      if (state.journal.length && !window.confirm('Delete all ' + state.journal.length + ' journal records and their stored charts?')) return;
+      state.journal = [];
+      clearShotStore();
+      persistJournal();
+      renderJournalTable();
+      renderStatsPage();
+      log('Journal and stored charts cleared.', '#f59e0b');
+    });
+    $('btnCloseModal').addEventListener('click', () => $('tradeModal').classList.remove('open'));
+    $('btnEnableAlerts').addEventListener('click', async () => {
+      state.alertsEnabled = true;
+      if ('Notification' in window) await Notification.requestPermission();
+      triggerAlert('Alerts Active', 'Sound & desktop notifications enabled.', 'BUY');
+    });
+  }
+
+  async function boot() {
+    state.idb = await openIDB();
+    loadJournal();
+    restoreActiveTrade();     // a trade that was pending/active before the reload keeps tracking
+    initChart();
+    bindEvents();
+    const ok = await syncAllData();
+    if (ok) {
+      connectWS();
+      log('SMC Gold Terminal v4.7 online — build ' + BUILD_STAMP + '. Structural Swing High/Low TP & 1:2 R:R Filter active. Footer R:R dots armed.', '#10b981');
+    }
+    setInterval(calibrateSpot, 60000);
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();
+})();
+</script>
+</body>
+</html>
