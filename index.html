@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>SMC Gold Terminal v4.13 — Live XAUUSD Execution, Journal &amp; Analytics</title>
+<title>SMC Gold Terminal v4.18 — SMC / XAUUSD Terminal</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700;800&display=swap" rel="stylesheet">
@@ -296,7 +296,7 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
   <div class="brand">
     <div class="brand-logo">SMC</div>
     <div>
-      <div class="brand-title">SMC Gold Terminal <span class="pill pill-neutral" id="buildBadge">v4.13 CANDLE</span></div>
+      <div class="brand-title">SMC Gold Terminal <span class="pill pill-neutral" id="buildBadge">v4.21 VERIFIED</span></div>
       <div class="brand-sub">Swing Liquidity Targets • 1:2 R:R Filter • Auto Trade Lifecycle &amp; Screenshot Journal</div>
     </div>
   </div>
@@ -448,8 +448,8 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
             <div class="kv-box"><div class="k">Direction / Grade</div><div class="v" id="pDirGrade">—</div></div>
             <div class="kv-box"><div class="k">Entry (Zone)</div><div class="v" id="pEntry">—</div></div>
             <div class="kv-box"><div class="k">Stop Loss (+Buf)</div><div class="v" id="pSL" style="color:var(--sell);">—</div></div>
-            <div class="kv-box"><div class="k">TP1 (Prev Swing)</div><div class="v" id="pTP1" style="color:var(--buy);">—</div></div>
-            <div class="kv-box"><div class="k">TP2 (Next Swing)</div><div class="v" id="pTP2" style="color:var(--buy);">—</div></div>
+            <div class="kv-box"><div class="k">TP1 · 50% (1:2)</div><div class="v" id="pTP1" style="color:var(--buy);">—</div></div>
+            <div class="kv-box"><div class="k">TP2 · 50% (1:3)</div><div class="v" id="pTP2" style="color:var(--buy);">—</div></div>
             <div class="kv-box"><div class="k">Structural R:R</div><div class="v" id="pRR">—</div></div>
             <div class="kv-box"><div class="k">Lot Size (1% Risk)</div><div class="v" id="pLots">—</div></div>
             <div class="kv-box"><div class="k">Risk $ / Reward $</div><div class="v" id="pUsd">—</div></div>
@@ -496,7 +496,6 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
         <option value="ALL">All Results</option>
         <option value="WIN">Wins Only</option>
         <option value="LOSS">Losses Only</option>
-        <option value="CANCELLED">Cancelled</option>
       </select>
       <select id="fltTF">
         <option value="ALL">All Timeframes</option>
@@ -536,7 +535,7 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
             <th>Dir / Grade</th>
             <th>Entry</th>
             <th>SL</th>
-            <th>TP1 (Swing)</th>
+            <th>TP1 · 50%</th>
             <th>R:R</th>
             <th>Result</th>
             <th>PnL (R)</th>
@@ -547,6 +546,15 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
         </thead>
         <tbody id="journalTbody"></tbody>
       </table>
+      <div id="skippedPanel" hidden style="margin-top:10px;border-top:1px dashed rgba(255,255,255,0.10);padding-top:8px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+          <div style="font-size:10.5px;letter-spacing:0.10em;text-transform:uppercase;color:var(--text-muted);font-weight:700;">
+            Skipped — never filled, not counted
+          </div>
+          <button class="btn" id="btnClearSkipped" style="padding:3px 9px;font-size:10px;">Clear</button>
+        </div>
+        <div id="skippedList" style="margin-top:6px;font-family:'JetBrains Mono',monospace;font-size:11px;line-height:1.75;color:var(--text-secondary);"></div>
+      </div>
     </div>
   </div>
 </section>
@@ -683,7 +691,9 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
     alertsEnabled: false,
     audioCtx: null,
     currentSetup: null,    // Best valid setup on active TF
-    activeTrade: null,     // Currently tracked trade: { status: 'PENDING'|'ACTIVE', ... }
+    skipped: [],           // setups that expired unfilled — visible, never counted as trades
+    liveTrades: [],        // Every tracked setup: PENDING -> ACTIVE -> closed. One per timeframe.
+    activeTrade: null,     // Mirror of the primary live trade (first ACTIVE, else first PENDING)
     journal: [],           // Closed trades (metadata only — charts live in IndexedDB)
     settledZoneIds: new Set(), // Zones already traded/cancelled this session (blocks journal spam)
     lastFilteredZoneId: null,  // De-duplicates the FILTERED event-stream lines
@@ -694,7 +704,7 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
   };
 
   /* Bumped on every rebuild — check this in the console to prove which build your browser loaded. */
-  const BUILD_STAMP = '2026-10-22 01:20 · v4.13 · full-candle chart fit + zones cover the origin candle wick-to-wick';
+  const BUILD_STAMP = '2026-10-22 10:20 · v4.21 · full regression pass (60 checks) + honest leg labels on a straight stop-out';
 
   let chart = null, candleSeries = null, volSeries = null, overlay = null, octx = null;
   let drawQueued = false;
@@ -884,21 +894,29 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
         }
       });
 
-      // Pick first structural target that achieves meaningful swing structure (or fallback to highest structural swing)
-      let tp1Obj = uniqueTargets.find(t => Math.abs(t.price - entry) / risk >= cfg.minRR) || uniqueTargets[0];
-      if (!tp1Obj) {
-        tp1Obj = { price: isBuy ? entry + risk * cfg.minRR : entry - risk * cfg.minRR, src: 'Structure Projection' };
-      }
-      const tp1Idx = uniqueTargets.indexOf(tp1Obj);
-      const tp2Obj = (tp1Idx >= 0 && uniqueTargets[tp1Idx + 1])
-        ? uniqueTargets[tp1Idx + 1]
-        : { price: isBuy ? tp1Obj.price + risk * 1.2 : tp1Obj.price - risk * 1.2, src: 'Extended Swing' };
+      /* TRADE MANAGEMENT (v4.15): exits are R-based, not swing-based.
+           TP1 = 1:2  -> book 50% of the position
+           TP2 = 1:3  -> close the remaining 50%
+         Structure still drives whether the setup is worth taking (there must be at least
+         `minRR` of clear room before the nearest swing/opposing zone), and it caps the runner
+         when structure sits between 1:2 and 1:3. */
+      const PARTIAL_R = 2.0, FINAL_R = 3.0;
+      const nearestRoomR = uniqueTargets.length
+        ? Math.abs(uniqueTargets[0].price - entry) / risk
+        : Infinity;
+      const nearestSrc = uniqueTargets.length ? uniqueTargets[0].src : 'open air';
 
-      const tp1 = tp1Obj.price;
-      const tp2 = tp2Obj.price;
-      const rr = Math.abs(tp1 - entry) / risk;
-      const rr2 = Math.abs(tp2 - entry) / risk;
-      const passesRR = rr >= cfg.minRR;
+      const tp1 = isBuy ? entry + risk * PARTIAL_R : entry - risk * PARTIAL_R;
+      // the runner never resolves shorter than the partial level, and is capped by real structure
+      const finalRUsed = Math.max(PARTIAL_R + 0.25, Math.min(FINAL_R, nearestRoomR));
+      const tp2 = isBuy ? entry + risk * finalRUsed : entry - risk * finalRUsed;
+
+      const rr = PARTIAL_R;
+      const rr2 = finalRUsed;
+      const roomR = Number.isFinite(nearestRoomR) ? Number(nearestRoomR.toFixed(2)) : 99;
+      const passesRR = nearestRoomR >= cfg.minRR;      // enough clear room for the 1:2 partial
+      const tp1Obj = { price: tp1, src: '1:2 · book 50%' };
+      const tp2Obj = { price: tp2, src: `${nearestSrc} · close 50% (1:${finalRUsed.toFixed(2)})` };
 
       // Setup Grading (A+, A, B, SKIP)
       const htfAligned = (isBuy && (bias4h.bias === 'BULLISH' || bias1h.bias === 'BULLISH')) ||
@@ -926,7 +944,7 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
       return {
         id: zone.id, zone, dir, grade, entry, sl, tp1, tp2,
         tp1Src: tp1Obj.src, tp2Src: tp2Obj.src,
-        risk, rr, rr2, passesRR, riskUsd, rewardUsd, lots,
+        risk, rr, rr2, roomR, nearestSrc, passesRR, riskUsd, rewardUsd, lots,
         checks: { htfAligned, bothHtfAligned, isFresh, hasVol: zone.hasVol, swept: zone.sweptLiquidity, passesRR }
       };
     },
@@ -1183,99 +1201,173 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
   }
 
   /* ---------------- 4. LIVE TRADE LIFECYCLE STATE MACHINE ---------------- */
+  /* A trade must be judged on the timeframe it was taken on. The charted timeframe is irrelevant:
+     judging a 5M trade with a 4H candle (or vice versa) fills and stops it on bars that have
+     nothing to do with the setup. */
+  const TF_SECONDS = { '5m': 300, '15m': 900, '1h': 3600, '4h': 14400 };
+  /* An unfilled setup should not outlive ~12 bars of its own timeframe: 3h on 5M/15M, 12h on 1H,
+     48h on 4H. A flat 3h was too short for higher timeframes and too long for scalps. */
+  const pendingTtl = tf => Math.max(3 * 60 * 60 * 1000, 12 * (TF_SECONDS[tf] || 300) * 1000);
+
+  function candleForTrade(tr, fallback) {
+    const series = state.candles[tr && tr.tf];
+    if (series && series.length) return series[series.length - 1];
+    return fallback;
+  }
+
   function evaluateTradeLifecycle(latestCandle) {
     if (!latestCandle) return;
     const price = latestCandle.close;
 
-    // 1. If no active/pending trade, auto-arm the best current setup if it passes the 1:2 R:R filter.
-    //    A zone is only ever armed once per session (settledZoneIds) and there is a cooldown
-    //    between arms, so a single zone can no longer spam the journal with duplicate rows.
-    if (!state.activeTrade && state.currentSetup && state.currentSetup.passesRR) {
+    /* 1. AUTO-ARM — one tracked setup per timeframe, several timeframes at once.
+       The old guard was `!state.activeTrade`: ONE trade for the whole terminal. A 15M SELL could
+       never be tracked while a 5M trade held the slot, so good setups silently went unrecorded. */
+    if (state.currentSetup && state.currentSetup.passesRR) {
       const s = state.currentSetup;
       const zoneKey = s.zone && s.zone.id;
       const alreadySettled = zoneKey && state.settledZoneIds.has(zoneKey);
-      const cooledDown = Date.now() - state.lastArmAt > 5 * 60 * 1000;
+      const cooledDown = Date.now() - state.lastArmAt > 60 * 1000;
+      const busyTf = state.liveTrades.some(t => t.tf === s.zone.tf);
       const act = setupActionability(s, price);
-      /* ARM ONLY WHAT THE CARD CALLS LIVE.
-         Arming up to 1.0R away from the entry was the source of the CANCELLED rows: the trade sat
-         PENDING while price walked to TP1 without ever touching the entry, and the journal recorded
-         "missed TP". The card already refuses to print a BUY/SELL unless price is at the zone
-         (act.live), so the auto-tracker now uses the very same test — no more phantom pendings. */
-      if (!alreadySettled && cooledDown && act.ok && act.live) {
-        armTradeFromSetup(s, false);
-      }
+      if (!alreadySettled && cooledDown && !busyTf && act.ok) armTradeFromSetup(s, false);
     }
 
-    const tr = state.activeTrade;
-    if (!tr) return;
+    if (!state.liveTrades.length) { syncPrimaryTrade(); return; }
 
-    /* PENDING -> ACTIVE / CANCELLED.
-       Order matters and price matters:
-       1) FILL FIRST. If this bar traded through the entry, the trade is live — even if the same
-          bar also reached TP1 (that is a WIN, not a cancellation).
-       2) Invalidation and "no fill" are judged on the CURRENT price, never on the in-progress
-          candle's high/low, which still contains price action from before the trade was armed. */
-    if (tr.status === 'PENDING') {
-      const touchedBuy  = tr.dir === 'BUY'  && latestCandle.low  <= tr.entry && latestCandle.high >= tr.entry;
-      const touchedSell = tr.dir === 'SELL' && latestCandle.high >= tr.entry && latestCandle.low  <= tr.entry;
-      const insideZoneNow = (tr.dir === 'BUY'  && price <= tr.entry && price > tr.sl)
-                         || (tr.dir === 'SELL' && price >= tr.entry && price < tr.sl);
+    /* 2. Walk EVERY tracked setup.
+       RULE (v4.14, as requested): the journal records FILLED trades only.
+         PENDING touched by price        -> ACTIVE (the same bar may already resolve TP/SL)
+         PENDING that dies without a fill-> dropped silently, terminal stream only.
+       No CANCELLED rows, no "missed TP", no "no fill": a setup that never filled was never a trade. */
+    for (const tr of state.liveTrades.slice()) {
+      // the candle for THIS trade's timeframe
+      const bar = candleForTrade(tr, latestCandle);
 
-      if (touchedBuy || touchedSell || insideZoneNow) {
-        tr.status = 'ACTIVE';
-        tr.openedAt = Date.now();
-        persistActiveTrade();
-        triggerAlert(`Trade ACTIVE (${tr.dir} ${tr.grade})`, `Entered @ $${tr.entry.toFixed(2)} | SL $${tr.sl.toFixed(2)} | TP1 $${tr.tp1.toFixed(2)} (1:${tr.rr.toFixed(2)})`, tr.dir);
-        // fall through: the ACTIVE block below resolves SL/TP on this very bar
-      } else {
-        const invalidated = tr.dir === 'BUY' ? price < tr.sl : price > tr.sl;
-        const ranToTarget = tr.dir === 'BUY' ? price >= tr.tp1 : price <= tr.tp1;
+      if (tr.status === 'PENDING') {
+        /* Abandon a setup that has sat unfilled for hours. Without this a pending row can linger
+           for 290+ minutes in the journal long after the zone stopped being relevant. */
+        if (Date.now() - (tr.createdAt || 0) > pendingTtl(tr.tf)) {
+          dropTrade(tr, `never filled within ${Math.round(pendingTtl(tr.tf) / 3600000)}h`);
+          continue;
+        }
+        const touchedBuy  = tr.dir === 'BUY'  && bar.low  <= tr.entry && bar.high >= tr.entry;
+        const touchedSell = tr.dir === 'SELL' && bar.high >= tr.entry && bar.low  <= tr.entry;
+        const insideZoneNow = (tr.dir === 'BUY'  && price <= tr.entry && price > tr.sl)
+                           || (tr.dir === 'SELL' && price >= tr.entry && price < tr.sl);
 
-        if (invalidated || ranToTarget) {
-          tr.status = 'CANCELLED';
+        if (touchedBuy || touchedSell || insideZoneNow) {
+          tr.status = 'ACTIVE';
+          tr.openedAt = Date.now();
+          triggerAlert(`Trade ACTIVE (${tr.dir} ${tr.grade})`, `${tr.tf.toUpperCase()} entered @ $${tr.entry.toFixed(2)} | SL $${tr.sl.toFixed(2)} | TP1 $${tr.tp1.toFixed(2)} (1:${tr.rr.toFixed(2)})`, tr.dir);
+        } else {
+          const invalidated = tr.dir === 'BUY' ? price < tr.sl : price > tr.sl;
+          const ranToTarget = tr.dir === 'BUY' ? price >= tr.tp1 : price <= tr.tp1;
+          if (invalidated || ranToTarget) {
+            dropTrade(tr, invalidated ? 'zone broke before price reached the entry'
+                                      : 'price ran to TP1 before the entry filled');
+            continue;
+          }
+        }
+      }
+
+      /* ACTIVE — two-leg management:
+           leg 1: 50% booked at 1:2 (tr.tp1)
+           leg 2: the other 50% closed at 1:3 (tr.tp2), or stopped at the original SL
+         Conservative tie-break kept: if the stop and a target are touched in the same bar, the
+         stop wins for the remaining size. */
+      if (tr.status === 'ACTIVE') {
+        const slHit = tr.dir === 'BUY' ? (bar.low <= tr.sl || price <= tr.sl) : (bar.high >= tr.sl || price >= tr.sl);
+        const partHit = tr.dir === 'BUY' ? (bar.high >= tr.tp1 || price >= tr.tp1) : (bar.low <= tr.tp1 || price <= tr.tp1);
+        const finalHit = tr.dir === 'BUY' ? (bar.high >= tr.tp2 || price >= tr.tp2) : (bar.low <= tr.tp2 || price <= tr.tp2);
+
+        // Leg 1 — book half at the 1:2 level
+        if (!tr.booked50 && partHit) {
+          tr.booked50 = true;
+          tr.partialAt = Date.now();
+          tr.realizedR = Number((0.5 * tr.rr).toFixed(2));   // half at 2R = +1.00R banked
+          tr.legs = [`50% @ 1:${tr.rr.toFixed(2)}`];
+          triggerAlert(`Half Booked (${tr.dir} ${tr.grade})`, `${tr.tf.toUpperCase()} +${tr.realizedR.toFixed(2)}R banked at $${tr.tp1.toFixed(2)} — runner open to $${tr.tp2.toFixed(2)} (1:${(tr.rr2 || tr.rr).toFixed(2)})`, tr.dir);
+        }
+
+        if (slHit || finalHit) {
+          const finalLeg = slHit ? -0.5 : 0.5 * (tr.rr2 || tr.rr);          // stop wins ties
+          const rTotal = tr.booked50 ? Number((tr.realizedR + finalLeg).toFixed(2)) : Number((slHit ? -1 : 0.5 * tr.rr + finalLeg).toFixed(2));
+          tr.status = finalHit && !slHit ? 'TP2 HIT' : (tr.booked50 ? 'PARTIAL+SL' : 'SL HIT');
+          tr.result = rTotal > 0 ? 'WIN' : 'LOSS';
+          tr.rMultiple = rTotal;
           tr.closedAt = Date.now();
-          tr.result = 'CANCELLED';
-          tr.cancelReason = invalidated ? 'zone invalidated before fill' : 'ran to TP1 without a fill';
-          tr.rMultiple = 0;
-          tr.pnlUsd = 0;
+          tr.pnlUsd = Number((rTotal * tr.riskUsd).toFixed(2));
+          /* Leg labels must describe what actually happened. A straight stop-out is 100% @ SL —
+             the old code appended a phantom "50% @ 1:3" that was never reached. */
+          tr.legs = tr.booked50
+            ? (tr.legs || []).concat(slHit ? ['50% @ SL'] : [`50% @ 1:${(tr.rr2 || tr.rr).toFixed(2)}`])
+            : slHit ? ['100% @ SL']
+                    : [`50% @ 1:${tr.rr.toFixed(2)}`, `50% @ 1:${(tr.rr2 || tr.rr).toFixed(2)}`];
           if (tr.zoneId) state.settledZoneIds.add(tr.zoneId);
-          saveTradeToJournal(tr);
-          persistActiveTrade();
-          triggerAlert('Setup Cancelled', `${tr.tf.toUpperCase()} ${tr.dir} — ${tr.cancelReason}.`, 'WARN');
-          state.activeTrade = null;
-          persistActiveTrade();
-          return;
+          saveTradeToJournal(tr);                       // <- the ONLY way a row enters the journal
+          dropFromLive(tr);
+          triggerAlert(`Trade Closed: ${tr.result}`, `${tr.dir} ${tr.tf.toUpperCase()} ${tr.legs.join(' + ')} = ${rTotal > 0 ? '+' : ''}${rTotal}R ($${tr.pnlUsd.toFixed(2)})`, rTotal > 0 ? 'BUY' : 'SELL');
         }
       }
     }
 
-    // 2. If trade is ACTIVE, check SL and TP1 hits (Conservative rule: if both hit in same candle -> SL HIT)
-    if (tr.status === 'ACTIVE') {
-      const slHit = tr.dir === 'BUY' ? (latestCandle.low <= tr.sl || price <= tr.sl) : (latestCandle.high >= tr.sl || price >= tr.sl);
-      const tpHit = tr.dir === 'BUY' ? (latestCandle.high >= tr.tp1 || price >= tr.tp1) : (latestCandle.low <= tr.tp1 || price <= tr.tp1);
+    syncPrimaryTrade();
+    persistActiveTrade();
+  }
 
-      if (slHit || tpHit) {
-        // Safe conservative assumption: if both touched in same bar, count as SL
-        const isWin = tpHit && !slHit;
-        tr.status = isWin ? 'TP HIT' : 'SL HIT';
-        tr.result = isWin ? 'WIN' : 'LOSS';
-        tr.closedAt = Date.now();
-        tr.rMultiple = isWin ? Number(tr.rr.toFixed(2)) : -1.0;
-        tr.pnlUsd = Number((tr.rMultiple * tr.riskUsd).toFixed(2));
-        if (tr.zoneId) state.settledZoneIds.add(tr.zoneId);
-        saveTradeToJournal(tr);
-        persistActiveTrade();
-        state.activeTrade = null;
-        persistActiveTrade();   // trade is closed — drop the persisted copy
-        triggerAlert(`Trade Closed: ${tr.result}`, `${tr.dir} ${tr.tf.toUpperCase()} closed for ${tr.rMultiple > 0 ? '+' : ''}${tr.rMultiple}R ($${tr.pnlUsd.toFixed(2)})`, isWin ? 'BUY' : 'SELL');
-      }
-    }
+  /* Removes a setup from tracking without writing a journal row. */
+  function dropFromLive(tr) {
+    const i = state.liveTrades.indexOf(tr);
+    if (i >= 0) state.liveTrades.splice(i, 1);
+    syncPrimaryTrade();
+  }
+
+  /* A setup that never filled is not a trade and never enters the journal — but it must not vanish
+     without a trace either, otherwise the chart shows a perfect winner and the journal shows nothing.
+     Every skip is kept in state.skipped and surfaced under the journal table. */
+  function dropTrade(tr, why) {
+    if (tr.zoneId) state.settledZoneIds.add(tr.zoneId);
+    const price = state.livePrice;
+    const hitTp1 = price != null && (tr.dir === 'BUY' ? price >= tr.tp1 : price <= tr.tp1);
+    const wouldHaveR = hitTp1 ? `${(0.5 * tr.rr + 0.5 * (tr.rr2 || tr.rr)).toFixed(2)}R` : null;
+    state.skipped.unshift({
+      id: tr.id, tf: tr.tf, dir: tr.dir, grade: tr.grade, entry: tr.entry, sl: tr.sl, tp1: tr.tp1,
+      reason: why, wouldHaveR, at: Date.now()
+    });
+    state.skipped = state.skipped.slice(0, 40);
+    persistSkipped();
+    dropFromLive(tr);
+    persistActiveTrade();
+    log(`[SKIP] ${tr.tf.toUpperCase()} ${tr.dir} (${tr.grade}) @ $${tr.entry.toFixed(2)} — ${why}.`
+      + ` Not journalled (never filled)${wouldHaveR ? ` — it would have paid ${wouldHaveR}` : ''}.`, '#94a3b8');
+    renderJournalTable();
+  }
+
+  function persistSkipped() {
+    try { localStorage.setItem('smc_gold_skipped_v4', JSON.stringify(state.skipped.slice(0, 40))); } catch (e) {}
+  }
+
+  function loadSkipped() {
+    try {
+      const raw = localStorage.getItem('smc_gold_skipped_v4');
+      const arr = raw ? JSON.parse(raw) : [];
+      state.skipped = Array.isArray(arr) ? arr.filter(x => x && x.entry).slice(0, 40) : [];
+    } catch (e) { state.skipped = []; }
+  }
+
+  /* state.activeTrade stays the single "primary" trade the dashboard / price lines read. */
+  function syncPrimaryTrade() {
+    state.activeTrade = state.liveTrades.find(t => t.status === 'ACTIVE') || state.liveTrades[0] || null;
   }
 
   function armTradeFromSetup(s, manual = false) {
     if (!s) return;
+    // one live setup per timeframe, and never the same zone twice
+    if (state.liveTrades.some(t => t.tf === s.zone.tf)) return;
+    if (state.liveTrades.some(t => t.zoneId === s.zone.id)) return;
+    if (state.liveTrades.length >= 4) return;
     const sess = Quant.getSession();
-    state.activeTrade = {
+    const tr = {
       id: 'TR_' + Date.now() + '_' + Math.floor(Math.random() * 999),
       mode: 'LIVE',
       tf: s.zone.tf,
@@ -1287,6 +1379,7 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
       tp1: s.tp1,
       tp2: s.tp2,
       rr: s.rr,
+      rr2: s.rr2 || s.rr,
       riskUsd: s.riskUsd,
       lots: s.lots,
       zoneId: s.zone.id,
@@ -1294,14 +1387,20 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
       zoneTop: s.zone.top,
       startTime: s.zone.startTime,
       status: 'PENDING',
+      booked50: false,
+      realizedR: 0,
+      legs: [],
       createdAt: Date.now(),
       openedAt: null,
       closedAt: null
     };
+    state.liveTrades.push(tr);
     state.lastArmAt = Date.now();
+    syncPrimaryTrade();
     persistActiveTrade();
     log(`[TRACK] ${s.zone.tf.toUpperCase()} ${s.dir} (${s.grade}) Pending @ $${s.entry.toFixed(2)} | TP1 $${s.tp1.toFixed(2)} (1:${s.rr.toFixed(2)})`, '#60a5fa');
-    if (manual) updateDashboardUI();
+    updateDashboardUI();
+    renderJournalTable();
   }
 
   /* ---------------- 5. HISTORICAL BACKTEST ENGINE (300 BARS) ---------------- */
@@ -1353,6 +1452,7 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
         usedZoneIds.add(z.id);
         // Simulate forward from idx+1 to see if Pending -> Active -> TP/SL
         let status = 'PENDING', openedTime = null;
+        let booked = false, realized = 0;   // two-leg state: 50% at 1:2, remainder at 1:3
         for (let k = idx + 1; k < candles.length - 1; k++) {
           const bar = candles[k];
           if (status === 'PENDING') {
@@ -1362,11 +1462,14 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
             if (touched) { status = 'ACTIVE'; openedTime = bar.time * 1000; }
           } else if (status === 'ACTIVE') {
             const slHit = setup.dir === 'BUY' ? bar.low <= setup.sl : bar.high >= setup.sl;
-            const tpHit = setup.dir === 'BUY' ? bar.high >= setup.tp1 : bar.low <= setup.tp1;
-            // Conservative rule: if both touched in same candle -> SL Hit
-            if (slHit || tpHit) {
-              const isWin = tpHit && !slHit;
-              const rMult = isWin ? Number(setup.rr.toFixed(2)) : -1.0;
+            const partHit = setup.dir === 'BUY' ? bar.high >= setup.tp1 : bar.low <= setup.tp1;
+            const finalHit = setup.dir === 'BUY' ? bar.high >= setup.tp2 : bar.low <= setup.tp2;
+            // Same two-leg management as live: 50% at 1:2, remainder at 1:3 (stop wins ties).
+            if (!booked && partHit) { booked = true; realized = 0.5 * setup.rr; }
+            if (slHit || finalHit) {
+              const finalLeg = slHit ? -0.5 : 0.5 * setup.rr2;
+              const rMult = Number((booked ? realized + finalLeg : (slHit ? -1 : 0.5 * setup.rr + finalLeg)).toFixed(2));
+              const isWin = rMult > 0;
               if (isWin) wins++; else losses++;
               netR += rMult;
               btTrades.push({
@@ -1387,6 +1490,13 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
                 zoneTop: z.top,
                 result: isWin ? 'WIN' : 'LOSS',
                 rMultiple: rMult,
+                booked50: booked,
+                legs: !booked && slHit ? ['100% @ SL']
+                     : booked ? [`50% @ 1:${setup.rr.toFixed(2)}`, slHit ? '50% @ SL' : `50% @ 1:${setup.rr2.toFixed(2)}`]
+                     : [`50% @ 1:${setup.rr.toFixed(2)}`, `50% @ 1:${setup.rr2.toFixed(2)}`],
+                booked50: booked,
+                legs: booked ? [`50% @ 1:${setup.rr.toFixed(2)}`, slHit ? '50% @ SL' : `50% @ 1:${setup.rr2.toFixed(2)}`]
+                             : [slHit ? '100% @ SL' : `50% @ 1:${setup.rr.toFixed(2)}`],
                 pnlUsd: Number((rMult * setup.riskUsd).toFixed(2)),
                 openedAt: openedTime,
                 closedAt: bar.time * 1000
@@ -1419,9 +1529,16 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
      Charts live in IndexedDB, so image bloat can no longer blow the ~5 MB
      localStorage quota and silently lose the journal. */
   function loadJournal() {
-    const stampLegacy = list => list.forEach(r => {
-      if (r && r.result === 'CANCELLED' && !r.cancelReason) r.cancelReason = 'legacy record — reason not captured';
-    });
+    loadSkipped();   // restore the "skipped, never filled" ledger
+    /* v4.14: a setup that never filled is not a trade, so old CANCELLED rows are removed from the
+       journal on load (they were the "missed TP" / bare CANCELLED clutter). Setups that expire
+       unfilled are now logged to the terminal stream only. */
+    let purgedCancels = 0;
+    const purgeCancels = list => {
+      const kept = list.filter(r => !(r && r.result === 'CANCELLED'));
+      purgedCancels += list.length - kept.length;
+      return kept;
+    };
     let parsed = [];
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -1441,8 +1558,9 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
       delete t.exitImg;
     });
 
-    stampLegacy(parsed);
+    parsed = purgeCancels(parsed);
     state.journal = parsed;
+    if (purgedCancels) log(`[MIGRATE] removed ${purgedCancels} cancelled setup(s) from the journal — only filled trades (WIN/LOSS) are kept now.`, '#94a3b8');
     $('navJournalCount').textContent = state.journal.length;
   }
 
@@ -1450,7 +1568,7 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
      reconnect) threw it away and it never reached the journal. It is now persisted. */
   function persistActiveTrade() {
     try {
-      if (state.activeTrade) localStorage.setItem(ACTIVE_KEY, JSON.stringify(state.activeTrade));
+      if (state.liveTrades.length) localStorage.setItem(ACTIVE_KEY, JSON.stringify(state.liveTrades));
       else localStorage.removeItem(ACTIVE_KEY);
     } catch (e) {}
   }
@@ -1459,12 +1577,14 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
     try {
       const raw = localStorage.getItem(ACTIVE_KEY);
       if (!raw) return;
-      const tr = JSON.parse(raw);
-      if (!tr || !tr.entry || !Number.isFinite(tr.entry)) return;
-      const age = Date.now() - (tr.createdAt || 0);
-      if (age > 12 * 60 * 60 * 1000) { localStorage.removeItem(ACTIVE_KEY); return; }  // stale
-      state.activeTrade = tr;
-      log(`[RESTORE] ${tr.tf.toUpperCase()} ${tr.dir} ${tr.status} @ $${tr.entry.toFixed(2)} recovered after reload — still tracking.`, '#60a5fa');
+      const parsed = JSON.parse(raw);
+      const list = (Array.isArray(parsed) ? parsed : [parsed])   // migrate the old single-trade payload
+        .filter(tr => tr && Number.isFinite(tr.entry))
+        .filter(tr => Date.now() - (tr.createdAt || 0) < 12 * 60 * 60 * 1000);   // drop stale
+      if (!list.length) { localStorage.removeItem(ACTIVE_KEY); return; }
+      state.liveTrades = list;
+      syncPrimaryTrade();
+      list.forEach(tr => log(`[RESTORE] ${tr.tf.toUpperCase()} ${tr.dir} ${tr.status} @ $${tr.entry.toFixed(2)} recovered after reload — still tracking.`, '#60a5fa'));
     } catch (e) {}
   }
 
@@ -1480,14 +1600,21 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
   function journalMetaLine() {
     const el = $('journalMeta');
     if (!el) return;
-    const inFlight = liveJournalRecord();
-    const live = state.journal.filter(j => j.mode === 'LIVE').length + (inFlight ? 1 : 0);
+    const inFlight = liveJournalRecords();
+    const live = state.journal.filter(j => j.mode === 'LIVE').length + inFlight.length;
     const bt = state.journal.filter(j => j.mode === 'BACKTEST').length;
     const canc = state.journal.filter(j => j.result === 'CANCELLED').length;
     const closed = state.journal.filter(j => j.result === 'WIN' || j.result === 'LOSS').length;
-    const inflight = inFlight ? ` · ${inFlight.status === 'ACTIVE' ? 'OPEN' : 'PENDING'} 1 (live)` : '';
-    const total = state.journal.length + (inFlight ? 1 : 0);
-    el.textContent = `${total} record${total === 1 ? '' : 's'} · ${closed} closed (WIN/LOSS) · ${canc} cancelled · LIVE ${live} / BACKTEST ${bt}${inflight}`;
+    const nPend = inFlight.filter(r => r.status === 'PENDING').length;
+    const nOpen = inFlight.filter(r => r.status === 'ACTIVE').length;
+    const parts = [];
+    if (nOpen) parts.push(`OPEN ${nOpen}`);
+    if (nPend) parts.push(`PENDING ${nPend}`);
+    const inflight = parts.length ? ' · ' + parts.join(' / ') + ' (live)' : '';
+    const nSkip = state.skipped.length;
+    const skipTxt = nSkip ? ` · ${nSkip} skipped (never filled)` : '';
+    const total = state.journal.length + inFlight.length;
+    el.textContent = `${total} record${total === 1 ? '' : 's'} · ${closed} closed (WIN/LOSS) · LIVE ${live} / BACKTEST ${bt}${inflight}${skipTxt}`;
     $('navJournalCount').textContent = total;
   }
 
@@ -1524,10 +1651,17 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
      "0 records". It is now rendered as a pinned live row derived from state.activeTrade.
      It is never pushed into state.journal, so Stats/CSV keep counting closed trades only and the
      row disappears on its own the moment the trade is written as a closed record. */
-  function liveJournalRecord() {
-    const at = state.activeTrade;
+  function liveJournalRecords() {
+    return state.liveTrades
+      .filter(at => !state.journal.some(j => j.id === at.id))
+      .map(at => buildLiveRecord(at))
+      .filter(Boolean);
+  }
+
+  function liveJournalRecord() { return liveJournalRecords()[0] || null; }
+
+  function buildLiveRecord(at) {
     if (!at) return null;
-    if (state.journal.some(j => j.id === at.id)) return null;   // already written as a closed row
     const p = state.livePrice;
     const risk = Math.abs(at.entry - at.sl);
     const filled = at.status === 'ACTIVE';
@@ -1538,28 +1672,54 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
     return Object.assign({}, at, {
       _live: true,
       _filled: filled,
-      result: filled ? 'OPEN' : 'PENDING',
+      result: filled ? (at.booked50 ? 'OPEN · 50% booked' : 'OPEN') : 'PENDING',
       rMultiple: Number(unrealR.toFixed(2)),
       pnlUsd: Number((unrealR * (at.riskUsd || 0)).toFixed(2)),
       _elapsedMin: Math.max(0, Math.round((Date.now() - (at.openedAt || at.createdAt || Date.now())) / 60000))
     });
   }
 
+  /* The quiet ledger of setups that died before entry — answers "why is this winner not in the
+     journal?" without ever faking a trade row. */
+  function renderSkippedPanel() {
+    const panel = $('skippedPanel'), list = $('skippedList');
+    if (!panel || !list) return;
+    const items = state.skipped.slice(0, 8);
+    panel.hidden = !items.length;
+    if (!items.length) { list.innerHTML = ''; return; }
+    list.innerHTML = items.map(sk => {
+      const when = new Date(sk.at).toLocaleTimeString();
+      const would = sk.wouldHaveR
+        ? `<span style="color:var(--buy);">would have paid ${sk.wouldHaveR}</span>`
+        : `<span style="color:var(--text-muted);">no target reached</span>`;
+      return `<div><span style="color:var(--text-muted);">${when}</span> · `
+        + `<span class="pill ${sk.dir === 'BUY' ? 'pill-buy' : 'pill-sell'}" style="padding:0 6px;font-size:9.5px;">${sk.dir} ${sk.grade || ''}</span> `
+        + `${(sk.tf || '').toUpperCase()} @ $${Number(sk.entry).toFixed(2)} — ${sk.reason} · ${would}</div>`;
+    }).join('');
+  }
+
   function refreshLiveJournalCells() {
-    const rec = liveJournalRecord();
-    const has = !!$('jLiveR');
-    if (rec && !has) { renderJournalTable(); return; }        // trade armed -> add the row
-    if (!rec && has) { renderJournalTable(); return; }        // trade closed -> drop the row
-    if (!rec) return;
-    const rEl = $('jLiveR'), pEl = $('jLivePnl'), dEl = $('jLiveDur');
+    const recs = liveJournalRecords();
+    const shown = document.querySelectorAll('#journalTbody [data-live-cell]').length;
+    if (recs.length !== state.liveTrades.length || (recs.length && !shown)) { renderJournalTable(); return; }
+    if (!recs.length) return;
     const col = v => v > 0 ? 'var(--buy)' : v < 0 ? 'var(--sell)' : 'var(--text-secondary)';
-    if (rEl) { rEl.textContent = rec._filled ? (rec.rMultiple > 0 ? '+' : '') + rec.rMultiple.toFixed(2) + 'R' : '—'; rEl.style.color = col(rec.rMultiple); }
-    if (pEl) { pEl.textContent = rec._filled ? (rec.pnlUsd >= 0 ? '+$' : '-$') + Math.abs(rec.pnlUsd).toFixed(2) : '—'; pEl.style.color = col(rec.pnlUsd); }
-    if (dEl) { dEl.textContent = rec._elapsedMin + 'm'; }
+    document.querySelectorAll('#journalTbody tr[data-idx]').forEach(rowEl => {
+      const idx = parseInt(rowEl.getAttribute('data-idx'), 10);
+      const rec = recs[idx];
+      if (!rec) return;
+      const rEl = rowEl.querySelector('[data-live-cell="r"]');
+      const pEl = rowEl.querySelector('[data-live-cell="pnl"]');
+      const dEl = rowEl.querySelector('[data-live-cell="dur"]');
+      if (rEl) { rEl.textContent = rec._filled ? (rec.rMultiple > 0 ? '+' : '') + rec.rMultiple.toFixed(2) + 'R' : '—'; rEl.style.color = col(rec.rMultiple); }
+      if (pEl) { pEl.textContent = rec._filled ? (rec.pnlUsd >= 0 ? '+$' : '-$') + Math.abs(rec.pnlUsd).toFixed(2) : '—'; pEl.style.color = col(rec.pnlUsd); }
+      if (dEl) { dEl.textContent = rec._elapsedMin + 'm'; }
+    });
   }
 
   function renderJournalTable() {
     journalMetaLine();
+    renderSkippedPanel();
     const resFlt = $('fltResult').value;
     const tfFlt = $('fltTF').value;
     const dirFlt = $('fltDir').value;
@@ -1573,15 +1733,12 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
       return true;
     });
 
-    // Live in-flight row, subject to the same TF / direction / source filters
-    let liveRec = liveJournalRecord();
-    if (liveRec) {
-      if (resFlt !== 'ALL') liveRec = null;
-      else if (tfFlt !== 'ALL' && liveRec.tf !== tfFlt) liveRec = null;
-      else if (dirFlt !== 'ALL' && liveRec.dir !== dirFlt) liveRec = null;
-      else if (srcFlt !== 'ALL' && liveRec.mode !== srcFlt) liveRec = null;
-    }
-    const rows = liveRec ? [liveRec].concat(closedRows) : closedRows;
+    // Live rows for every tracked setup, subject to the same TF / direction / source filters
+    let liveRecs = (resFlt === 'ALL') ? liveJournalRecords() : [];
+    if (tfFlt !== 'ALL') liveRecs = liveRecs.filter(r => r.tf === tfFlt);
+    if (dirFlt !== 'ALL') liveRecs = liveRecs.filter(r => r.dir === dirFlt);
+    if (srcFlt !== 'ALL') liveRecs = liveRecs.filter(r => r.mode === srcFlt);
+    const rows = liveRecs.concat(closedRows);
 
     const tbody = $('journalTbody');
     if (!rows.length) {
@@ -1599,6 +1756,7 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
       const resText = live
         ? (t.status === 'ACTIVE' ? 'OPEN · live' : 'PENDING · awaiting fill')
         : `${t.result}${t.cancelReason ? ' · ' + cancelShort(t.cancelReason) : ''}`;
+      const legNote = (t.legs && t.legs.length) ? t.legs.join(' + ') : '';
       const resTitle = live
         ? (t.status === 'ACTIVE' ? 'Entry filled — floating P/L, not counted in Stats until TP or SL'
                                  : 'Waiting for price to touch the entry — not counted in Stats yet')
@@ -1614,9 +1772,9 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
         <td class="mono">$${Number(t.tp1).toFixed(2)}</td>
         <td class="mono">1:${Number(t.rr).toFixed(2)}</td>
         <td><span class="pill ${resClass}" title="${resTitle}">${resText}</span></td>
-        <td class="mono"${live ? ' id="jLiveR"' : ''} style="color:${t.rMultiple > 0 ? 'var(--buy)' : t.rMultiple < 0 ? 'var(--sell)' : 'var(--text-secondary)'};">${live && !t._filled ? '—' : (t.rMultiple > 0 ? '+' : '') + Number(t.rMultiple || 0).toFixed(2) + 'R'}</td>
-        <td class="mono"${live ? ' id="jLivePnl"' : ''} style="color:${t.pnlUsd > 0 ? 'var(--buy)' : t.pnlUsd < 0 ? 'var(--sell)' : 'var(--text-secondary)'};">${live && !t._filled ? '—' : (t.pnlUsd >= 0 ? '+$' : '-$') + Math.abs(t.pnlUsd || 0).toFixed(2)}</td>
-        <td class="mono"${live ? ' id="jLiveDur"' : ''}>${durMin}</td>
+        <td class="mono" title="${legNote}"${live ? ` id="jLiveR_${idx}" data-live-cell="r"` : ''} style="color:${t.rMultiple > 0 ? 'var(--buy)' : t.rMultiple < 0 ? 'var(--sell)' : 'var(--text-secondary)'};">${live && !t._filled ? '—' : (t.rMultiple > 0 ? '+' : '') + Number(t.rMultiple || 0).toFixed(2) + 'R'}</td>
+        <td class="mono"${live ? ` id="jLivePnl_${idx}" data-live-cell="pnl"` : ''} style="color:${t.pnlUsd > 0 ? 'var(--buy)' : t.pnlUsd < 0 ? 'var(--sell)' : 'var(--text-secondary)'};">${live && !t._filled ? '—' : (t.pnlUsd >= 0 ? '+$' : '-$') + Math.abs(t.pnlUsd || 0).toFixed(2)}</td>
+        <td class="mono"${live ? ` id="jLiveDur_${idx}" data-live-cell="dur"` : ''}>${durMin}</td>
         <td><span class="pill ${live ? 'pill-warn' : 'pill-neutral'}">${live ? 'Live' : 'View'}</span></td>
       </tr>`;
     }).join('');
@@ -1644,7 +1802,9 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
     $('modalMeta').innerHTML = `
       <span class="pill pill-neutral">Entry: $${Number(t.entry).toFixed(2)}</span>
       <span class="pill pill-sell">SL: $${Number(t.sl).toFixed(2)}</span>
-      <span class="pill pill-buy">TP1: $${Number(t.tp1).toFixed(2)}</span>
+      <span class="pill pill-buy">TP1 50%: $${Number(t.tp1).toFixed(2)}</span>
+      ${t.tp2 ? `<span class="pill pill-buy">TP2 50%: $${Number(t.tp2).toFixed(2)}</span>` : ''}
+      ${(t.legs && t.legs.length) ? `<span class="pill pill-neutral">Legs: ${t.legs.join(' + ')}</span>` : ''}
       <span class="pill pill-neutral">R:R: 1:${Number(t.rr).toFixed(2)}</span>
       <span class="pill pill-neutral">Session: ${t.session || '—'}</span>
       <span class="pill pill-neutral">Zone: ${Number.isFinite(Number(t.zoneBottom)) ? '$' + num2(t.zoneBottom) + '–$' + num2(t.zoneTop) : 'n/a'}</span>
@@ -1867,7 +2027,7 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
     const tNow = state.activeTrade || (csNow && csNow.passesRR && !csNow.preview ? csNow : null);
     const sig = [
       $('chkLines').checked ? '1' : '0',
-      tNow ? [tNow.entry, tNow.sl, tNow.tp1, tNow.rr, tNow.id || 'setup'].map(v => (typeof v === 'number' ? v.toFixed(2) : v)).join('|') : 'none'
+      tNow ? [tNow.entry, tNow.sl, tNow.tp1, tNow.rr, tNow.tp2, tNow.rr2, tNow.id || 'setup'].map(v => (typeof v === 'number' ? v.toFixed(2) : v)).join('|') : 'none'
     ].join('#');
     if (!force && sig === lastLineSig) return;
     lastLineSig = sig;
@@ -1890,7 +2050,11 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
     }));
     priceLines.push(candleSeries.createPriceLine({
       price: target.tp1, color: '#10b981', lineWidth: 1,
-      lineStyle: LightweightCharts.LineStyle.Dashed, title: `TP1 (${target.rr.toFixed(1)}R)`
+      lineStyle: LightweightCharts.LineStyle.Dashed, title: `TP1 50% (${target.rr.toFixed(1)}R)`
+    }));
+    if (target.tp2) priceLines.push(candleSeries.createPriceLine({
+      price: target.tp2, color: '#059669', lineWidth: 1,
+      lineStyle: LightweightCharts.LineStyle.Solid, title: `TP2 50% (${(target.rr2 || 3).toFixed(1)}R)`
     }));
   }
 
@@ -1974,10 +2138,13 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
       const drawZoneSet = (key, isHtf) => {
         const sc = state.analysis[key];
         if (!sc) return;
+        /* Draw every zone this timeframe has. The old cap was 6, so on a 5M with 9 live zones three
+           of them were invisible while the header still said "Zones: 9" — reported as
+           "demand not mark". A hard ceiling is kept only to bound drawing work. */
         const zones = sc.supply.concat(sc.demand)
           .filter(z => !(z.broken && !showMit))
           .sort((a, b) => Math.abs(a.mid - price) - Math.abs(b.mid - price))
-          .slice(0, isHtf ? 4 : 6);
+          .slice(0, isHtf ? 10 : 24);
 
         zones.forEach(z => {
           const xStart = xForTime(z.startTime);
@@ -2087,16 +2254,23 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
     // Price trading through the far side of the zone (beyond the stop side) kills the setup,
     // but being anywhere INSIDE the band is still a valid fill — that is the entry region.
     const beyondZone = s.dir === 'BUY' ? price < zBot - 0.05 : price > zTop + 0.05;
-    const live = !beyondZone && (inZone || (!wrongSide && distR <= ZONE_LIVE_R));
-    const ok = !wrongSide && distR <= TRIGGER_RANGE_R;      // auto-tracker may arm this early
-    const level = live ? 'LIVE' : beyondZone ? 'PAST' : ok ? 'WATCH' : 'FAR';
+    /* MISSED: the whole trade has already happened without a fill. For a SELL the entry sits above
+       price, so if price is already at or below TP1 the move is gone — telling the user to "wait for
+       price to reach the entry" is a lie, because by the time it gets there the target is history. */
+    const tp1Behind = s.dir === 'BUY' ? price >= s.tp1 : price <= s.tp1;
+    const missed = tp1Behind && !inZone;
+    const live = !missed && !beyondZone && (inZone || (!wrongSide && distR <= ZONE_LIVE_R));
+    const ok = !missed && !wrongSide && distR <= TRIGGER_RANGE_R;   // auto-tracker may arm this early
+    const level = missed ? 'MISSED' : live ? 'LIVE' : beyondZone ? 'PAST' : ok ? 'WATCH' : 'FAR';
     return {
-      level, ok, live, distR, wrongSide, inZone, beyondZone,
-      reason: live
-        ? (inZone ? 'price inside the zone' : `entry ${distR.toFixed(2)}R away`)
-        : beyondZone
-          ? `price broke through the ${s.dir} zone`
-          : `${distR.toFixed(2)}R away from entry`
+      level, ok, live, distR, wrongSide, inZone, beyondZone, missed,
+      reason: missed
+        ? `price already ran past TP1 $${s.tp1.toFixed(2)} — this setup is spent`
+        : live
+          ? (inZone ? 'price inside the zone' : `entry ${distR.toFixed(2)}R away`)
+          : beyondZone
+            ? `price broke through the ${s.dir} zone`
+            : `${distR.toFixed(2)}R away from entry`
     };
   }
 
@@ -2443,7 +2617,13 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
       const fresh = scan.supply.concat(scan.demand).filter(z => !z.broken);
       fresh.sort((a, b) => Math.abs(a.mid - state.livePrice) - Math.abs(b.mid - state.livePrice));
       const setups = fresh.map(z => Quant.buildSwingSetup(z, allZones, scan.swings, state.bias4h, state.bias1h, cfg)).filter(Boolean);
-      state.currentSetup = setups.find(s => s.passesRR) || setups[0] || null;
+      /* Prefer a setup that is still tradable. A zone whose target price has already been passed is
+         spent — it must not hog the card while another zone is still valid. */
+      const actOf = st => setupActionability(st, state.livePrice);
+      state.currentSetup = setups.find(st => st.passesRR && !actOf(st).missed)
+        || setups.find(st => !actOf(st).missed)
+        || setups.find(st => st.passesRR)
+        || setups[0] || null;
     }
 
     if (latest) evaluateTradeLifecycle(latest);
@@ -2486,23 +2666,36 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
         sigPill.textContent = `${setupTF} ${s.dir} SETUP`;
         sigPill.title = `${setupTF} ${s.zone.type} zone · price at the zone`;
         sigPill.className = 'pill ' + (s.dir === 'BUY' ? 'pill-buy' : 'pill-sell');
+      } else if (act.missed) {
+        /* Price already traded through the target — this zone cannot produce a fill any more.
+           Saying "WAIT … no signal until price reaches $x" sent the user waiting for a trade
+           that was already over. */
+        sigPill.textContent = `EXPIRED · ${setupTF} ${s.dir}`;
+        sigPill.title = `${act.reason}. Waiting for a fresh zone.`;
+        sigPill.className = 'pill pill-warn';
       } else {
         // Price is not at the zone -> there is no signal to take. Show WAIT, not a BUY/SELL.
         sigPill.textContent = `WAIT · ${setupTF} ${s.dir} ZONE`;
         sigPill.title = `No signal — ${act.reason}. Waiting for price to reach the ${s.dir} zone.`;
         sigPill.className = 'pill pill-neutral';
       }
-      grPill.textContent = !s.passesRR ? 'Grade SKIP' : (act.live ? `Grade ${s.grade}` : `Grade ${s.grade} (zone)`);
-      grPill.className = 'pill ' + (!s.passesRR ? 'pill-warn' : act.live ? (s.grade.startsWith('A') ? 'pill-buy' : 'pill-warn') : 'pill-neutral');
+      grPill.textContent = act.missed ? 'Expired'
+        : !s.passesRR ? 'Grade SKIP'
+        : (act.live ? `Grade ${s.grade}` : `Grade ${s.grade} (zone)`);
+      grPill.className = act.missed ? 'pill pill-warn'
+        : !s.passesRR ? 'pill pill-warn'
+        : act.live ? ('pill ' + (s.grade.startsWith('A') ? 'pill-buy' : 'pill-warn'))
+        : 'pill pill-neutral';
 
-      $('stRRVal').textContent = `1 : ${s.rr.toFixed(2)}`;
+      const roomTxt = s.roomR >= 50 ? 'open air' : `${s.roomR.toFixed(2)}R`;
+      $('stRRVal').textContent = `1:${s.rr.toFixed(2)} → 1:${s.rr2.toFixed(2)}`;
       const rrCardLbl = $('stSetupTfTag');
       if (rrCardLbl) { rrCardLbl.textContent = setupTF; }
       rrPill.textContent = !s.passesRR
         ? 'SKIP (<1:' + cfg.minRR + ')'
-        : (act.live ? 'PASS (≥1:' + cfg.minRR + ')' : 'WATCH · 1:' + s.rr.toFixed(2));
+        : (act.live ? 'PASS (≥1:' + cfg.minRR + ')' : `WATCH · ${roomTxt}`);
       rrPill.className = 'pill ' + (!s.passesRR ? 'pill-sell' : act.live ? 'pill-buy' : 'pill-neutral');
-      $('stTargetsSub').textContent = `${setupTF} · TP1: $${s.tp1.toFixed(1)} (${s.tp1Src}) | TP2: $${s.tp2.toFixed(1)}`;
+      $('stTargetsSub').textContent = `${setupTF} · 50% @ $${s.tp1.toFixed(1)} (1:${s.rr.toFixed(1)}) | 50% @ $${s.tp2.toFixed(1)} (1:${s.rr2.toFixed(1)})`;
 
       // Side Panel Details
       $('pDirGrade').textContent = act.live ? `${s.dir} (${s.grade}) · ${setupTF}` : `${s.dir} PLAN · ${setupTF}`;
@@ -2512,8 +2705,9 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
       $('pTP1').textContent = '$' + s.tp1.toFixed(2);
       $('pTP2').textContent = '$' + s.tp2.toFixed(2);
       $('pRR').textContent = `1 : ${s.rr.toFixed(2)}`;
-      $('pLots').textContent = `${s.lots.toFixed(2)} Lots`;
-      $('pUsd').textContent = `-$${s.riskUsd.toFixed(0)} / +$${s.rewardUsd.toFixed(0)}`;
+      const num = (v, d = 2) => (Number.isFinite(v) ? v.toFixed(d) : '—');
+      $('pLots').textContent = `${num(s.lots)} Lots`;
+      $('pUsd').textContent = `-$${num(s.riskUsd, 0)} / +$${num(s.rewardUsd, 0)}`;
 
       $('gcBias').textContent = s.checks.bothHtfAligned ? '✓ 4H+1H Match' : s.checks.htfAligned ? '✓ Partial' : '✕ Counter';
       $('gcFresh').textContent = s.checks.isFresh ? '✓ Fresh Zone' : '⚠ Retested';
@@ -2522,9 +2716,11 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
       $('gcRR').textContent = s.checks.passesRR ? `✓ 1:${s.rr.toFixed(2)} Pass` : `✕ 1:${s.rr.toFixed(2)} Skip`;
       const sideNote = act.live
         ? (act.inZone ? `price inside the zone · ${s.dir} entry live` : `price at entry · take the ${s.dir}`)
-        : (act.beyondZone
-            ? `price broke the zone — setup dead, waiting for a new one`
-            : `${act.distR.toFixed(2)}R from entry — no signal until price reaches $${s.entry.toFixed(2)}`);
+        : (act.missed
+            ? `price already ran past TP1 $${s.tp1.toFixed(2)} — setup expired, no fill possible`
+            : act.beyondZone
+              ? `price broke the zone — setup dead, waiting for a new one`
+              : `${act.distR.toFixed(2)}R from entry — no signal until price reaches $${s.entry.toFixed(2)}`);
       $('stSignalSub').textContent = `${setupTF} ${s.zone.type} @ $${(s.zone.mid).toFixed(2)} · ${sideNote}`;
 
       // ---- FILTERED card: shown whenever the nearest setup fails the R:R filter ----
@@ -2532,7 +2728,7 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
       if (!s.passesRR) {
         fc.hidden = false;
         $('fcTag').textContent = 'FILTERED';
-        $('fcRR').textContent = `R:R ${s.rr.toFixed(2)} < 1:${cfg.minRR}`;
+        $('fcRR').textContent = `Room ${s.roomR >= 50 ? 'open air' : s.roomR.toFixed(2) + 'R'} < 1:${cfg.minRR} to ${s.nearestSrc}`;
         $('fcPrices').textContent =
           `Entry ${s.entry.toFixed(2)}   SL ${s.sl.toFixed(2)}   TP1 ${s.tp1.toFixed(2)}`;
         $('fcReason').textContent =
@@ -2592,7 +2788,14 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
       trPill.className = 'pill pill-neutral';
       sideBadge.textContent = 'IDLE';
       sideBadge.className = 'pill pill-neutral';
-      $('stTradePnlSub').textContent = 'Auto-tracks when R:R ≥ 1:2 setup forms';
+      const cs2 = state.currentSetup;
+      const a2 = cs2 ? setupActionability(cs2, p) : null;
+      // a setup carries its timeframe on the zone, not on itself
+      const csTf = cs2 ? String((cs2.zone && cs2.zone.tf) || state.activeTF).toUpperCase() : '';
+      $('stTradePnlSub').textContent = !cs2 ? 'Auto-tracks when an R:R ≥ 1:2 setup forms'
+        : a2.missed ? `No trade: ${csTf} setup already reached TP1 — expired`
+        : a2.distR > TRIGGER_RANGE_R ? `No trade: price is ${a2.distR.toFixed(2)}R from entry (arm limit ${TRIGGER_RANGE_R.toFixed(1)}R)`
+        : `Standing by: ${csTf} ${cs2.dir} arms within ${TRIGGER_RANGE_R.toFixed(1)}R of $${cs2.entry.toFixed(2)}`;
     }
 
     syncPriceLines();
@@ -2612,7 +2815,14 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
       return sc ? sc.supply.concat(sc.demand).filter(z => !z.broken).length : 0;
     };
     $('chartZoneSummary').textContent =
-      `${state.activeTF.toUpperCase()} Zones: ${countZones(state.activeTF)} | 5M: ${countZones('5m')} | 15M: ${countZones('15m')}`;
+      (() => {
+        const sc = state.analysis[state.activeTF];
+        const mit = sc ? sc.supply.concat(sc.demand).filter(z => z.broken).length : 0;
+        const hidden = ($('chkMitigated') && $('chkMitigated').checked) ? 0 : mit;
+        return `${state.activeTF.toUpperCase()} Zones: ${countZones(state.activeTF)}`
+          + ` | 5M: ${countZones('5m')} | 15M: ${countZones('15m')}`
+          + (hidden ? ` | +${hidden} mitigated hidden` : '');
+      })();
     $('sideZoneList').innerHTML = allFresh.slice().reverse().map(z => `
       <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border-subtle);">
         <span style="color:${z.type === 'supply' ? 'var(--sell)' : 'var(--buy)'};font-weight:700;">${z.tf.toUpperCase()} ${z.type.toUpperCase()}</span>
@@ -2623,17 +2833,100 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
   }
 
   /* ---------------- 10. WEBSOCKET STREAM ---------------- */
-  let ws = null, wsRetry = 0;
+  /* ---------------- 10b. LIVE STREAM + SELF-HEALING RECONNECT ----------------
+     A dropped or blocked websocket used to leave the terminal frozen on "Reconnecting…" with a
+     stale price for up to 60 s between attempts, and no fallback at all. Now:
+       - exponential backoff capped at 15 s (was 60 s), reset on any successful frame
+       - a REST poller takes over the moment the stream drops, so the chart keeps updating
+       - a heartbeat forces a reconnect if the socket is open but silent for 25 s
+       - reconnects immediately when the browser comes back online or the tab is shown again */
+  let ws = null, wsRetry = 0, wsTimer = null, restTimer = null, lastWsMsg = 0, wsHeartbeat = null;
+  const REST_POLL_MS = 4000;
+  const WS_SILENT_MS = 25000;
+
+  function setConnState(kind) {
+    const dot = $('connDot'), txt = $('connText');
+    if (!dot || !txt) return;
+    if (kind === 'live') { dot.className = 'status-dot online'; txt.textContent = 'Live Stream'; }
+    else if (kind === 'rest') { dot.className = 'status-dot'; txt.textContent = wsRetry > 2 ? 'REST fallback (stream blocked)' : 'Reconnecting — REST fallback…'; }
+    else if (kind === 'offline') { dot.className = 'status-dot offline'; txt.textContent = 'Offline'; }
+    else { dot.className = 'status-dot'; txt.textContent = 'Reconnecting…'; }
+  }
+
+  /* Keeps the terminal alive with plain REST calls while the websocket is unavailable.
+     Cancels itself as soon as the stream is back. */
+  function startRestFallback() {
+    if (restTimer) return;
+    const tick = async () => {
+      if (state.wsConnected) { stopRestFallback(); return; }
+      try {
+        const tf = state.activeTF;
+        const bars = await fetchTF(tf, 2);
+        if (bars && bars.length) {
+          const bar = bars[bars.length - 1];
+          const arr = state.candles[tf];
+          if (arr && arr.length) {
+            const last = arr[arr.length - 1];
+            if (bar.time === last.time) arr[arr.length - 1] = bar;
+            else if (bar.time > last.time) { arr.push(bar); if (arr.length > 350) arr.shift(); }
+            candleSeries.update(bar);
+            volSeries.update({ time: bar.time, value: bar.volume, color: bar.close >= bar.open ? 'rgba(30,83,229,0.5)' : 'rgba(10,10,10,0.5)' });
+          }
+          state.livePrice = bar.close;
+          runFullAnalysis();
+          // data is flowing over REST — keep trying the socket, but don't let the backoff grow
+          wsRetry = 0;
+          setConnState('rest');
+        }
+      } catch (e) { setConnState('offline'); }
+    };
+    tick();
+    restTimer = setInterval(tick, REST_POLL_MS);
+  }
+
+  function stopRestFallback() {
+    if (restTimer) { clearInterval(restTimer); restTimer = null; }
+  }
+
+  function scheduleReconnect() {
+    state.wsConnected = false;
+    stopHeartbeat();
+    startRestFallback();
+    setConnState('rest');
+    const delay = Math.min(15000, 1500 * Math.pow(1.6, wsRetry++));
+    clearTimeout(wsTimer);
+    wsTimer = setTimeout(connectWS, delay);
+  }
+
+  function stopHeartbeat() { if (wsHeartbeat) { clearInterval(wsHeartbeat); wsHeartbeat = null; } }
+
+  function startHeartbeat() {
+    stopHeartbeat();
+    lastWsMsg = Date.now();
+    wsHeartbeat = setInterval(() => {
+      if (!state.wsConnected) return;
+      if (Date.now() - lastWsMsg > WS_SILENT_MS) {
+        log('Stream silent for 25s — forcing a reconnect.', '#f59e0b');
+        try { ws.close(); } catch (e) {}
+      }
+    }, 5000);
+  }
+
   function connectWS() {
-    try { if (ws) ws.close(); } catch (e) {}
-    ws = new WebSocket(WS_STREAM);
+    try { if (ws && ws.readyState <= 1) ws.close(); } catch (e) {}
+    try { ws = new WebSocket(WS_STREAM); } catch (e) { scheduleReconnect(); return; }
+
     ws.onopen = () => {
       state.wsConnected = true;
       wsRetry = 0;
-      $('connDot').className = 'status-dot online';
-      $('connText').textContent = 'Live Stream';
+      lastWsMsg = Date.now();
+      stopRestFallback();
+      setConnState('live');
+      startHeartbeat();
     };
+    ws.onerror = () => { try { ws.close(); } catch (e) {} };   // onclose then runs the reconnect
     ws.onmessage = ev => {
+      lastWsMsg = Date.now();
       try {
         const msg = JSON.parse(ev.data);
         const k = msg.data && msg.data.k;
@@ -2662,14 +2955,20 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
         runFullAnalysis();
       } catch (e) {}
     };
-    ws.onclose = () => {
-      state.wsConnected = false;
-      $('connDot').className = 'status-dot';
-      $('connText').textContent = wsRetry > 3 ? 'Reconnecting (backoff)…' : 'Reconnecting…';
-      const delay = Math.min(60000, 2000 * Math.pow(1.7, wsRetry++));
-      setTimeout(connectWS, delay);
-    };
+    ws.onclose = () => scheduleReconnect();
   }
+
+  /* Recovery hooks: a laptop waking from sleep, a flaky ISP, or a tab switched back into view all
+     used to wait out the backoff. These force an immediate attempt instead. */
+  function forceReconnect() {
+    wsRetry = 0;
+    clearTimeout(wsTimer);
+    if (state.wsConnected) { try { ws.close(); } catch (e) {} }
+    connectWS();
+  }
+  window.addEventListener('online', () => { log('Network back online — reconnecting…', '#10b981'); forceReconnect(); });
+  window.addEventListener('offline', () => { setConnState('offline'); });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && !state.wsConnected) forceReconnect(); });
 
   /* ---------------- 11. EVENT BINDINGS & BOOT ---------------- */
   function bindEvents() {
@@ -2708,10 +3007,17 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
     $('btnSupplyRR').addEventListener('click', () => toggleRR('supply'));
 
     ['setBalance', 'setRiskPct', 'setEntryMode', 'setSlBuf', 'setMinRR', 'setExtraOffset'].forEach(id => {
-      $(id).addEventListener('change', () => { syncAllData(); });
+      $(id).addEventListener('change', () => {
+        runFullAnalysis();     // apply the new config to the current candles right away
+        syncAllData();         // and refresh from the feed
+      });
     });
 
-    $('btnSync').addEventListener('click', () => { log('Manual sync triggered…'); syncAllData(); });
+    $('btnSync').addEventListener('click', () => {
+      log('Manual sync triggered…', '#60a5fa');
+      forceReconnect();
+      syncAllData().then(ok => { if (ok && !state.wsConnected) setConnState('rest'); });
+    });
     $('btnBacktest').addEventListener('click', runHistoricalBacktest);
     $('btnForceTrack').addEventListener('click', () => {
       if (state.currentSetup) {
@@ -2722,7 +3028,8 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
       }
     });
     $('btnCancelTrack').addEventListener('click', () => {
-      state.activeTrade = null;
+      state.liveTrades = [];
+      syncPrimaryTrade();
       persistActiveTrade();
       updateDashboardUI();
       queueOverlayDraw();
@@ -2730,6 +3037,11 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
 
     ['fltResult', 'fltTF', 'fltDir', 'fltSource'].forEach(id => $(id).addEventListener('change', renderJournalTable));
     $('btnExportCSV').addEventListener('click', exportJournalCSV);
+    $('btnClearSkipped').addEventListener('click', () => {
+      state.skipped = [];
+      persistSkipped();
+      renderJournalTable();
+    });
     $('btnClearJournal').addEventListener('click', () => {
       if (state.journal.length && !window.confirm('Delete all ' + state.journal.length + ' journal records and their stored charts?')) return;
       state.journal = [];
@@ -2756,7 +3068,7 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
     const ok = await syncAllData();
     if (ok) {
       connectWS();
-      log('SMC Gold Terminal v4.13 online — build ' + BUILD_STAMP + '. Structural Swing High/Low TP & 1:2 R:R Filter active. Footer R:R dots armed.', '#10b981');
+      log('SMC Gold Terminal v4.21 online — build ' + BUILD_STAMP + '. Structural Swing High/Low TP & 1:2 R:R Filter active. Footer R:R dots armed.', '#10b981');
     }
     setInterval(calibrateSpot, 60000);
   }
