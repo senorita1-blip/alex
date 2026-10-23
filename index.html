@@ -97,6 +97,10 @@ html, body { background: var(--bg); color: var(--text); font-family: var(--font-
 .stat-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
 .stat-val { font-size: 14px; font-weight: 700; }
 /* A dot whose timeframe has no usable zone must say so instead of appearing to do nothing. */
+.zchip { font-size: 9.5px; font-weight: 700; padding: 1px 5px; border-radius: 4px; white-space: nowrap; }
+.zchip-ok { color: #10b981; background: rgba(16,185,129,0.12); }
+.zchip-warn { color: #f59e0b; background: rgba(245,158,11,0.12); }
+.zchip-live { color: #60a5fa; background: rgba(96,165,250,0.15); }
 .rr-btn.denied { animation: rrDeny 0.45s ease-in-out 2; border-color: #ef4444 !important; }
 @keyframes rrDeny { 0%,100% { background: transparent; } 50% { background: rgba(239,68,68,0.22); } }
 .rr-btn.denied .rr-led { background: #ef4444 !important; box-shadow: 0 0 6px #ef4444 !important; }
@@ -266,6 +270,13 @@ table.journal-table th {
 }
 table.journal-table tbody tr { cursor: pointer; transition: 0.12s; }
 table.journal-table tbody tr:hover { background: var(--surface-2); }
+/* v4.31 — WHY THIS TRADE. The journal now states, per row, which facts made the engine take
+   the setup. Wrapped and muted so a long line never widens the table. */
+table.journal-table td.why-cell {
+  max-width: 330px; min-width: 210px; white-space: normal; line-height: 1.4;
+  font-size: 10.5px; color: var(--text-secondary);
+}
+table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600; }
 
 /* ---------- Stats View ---------- */
 .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 12px; }
@@ -329,7 +340,7 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
   <div class="brand">
     <div class="brand-logo">SMC</div>
     <div>
-      <div class="brand-title">SMC Gold Terminal <span class="pill pill-neutral" id="buildBadge">v4.28 SWEPT PIVOTS</span></div>
+      <div class="brand-title">SMC Gold Terminal <span class="pill pill-neutral" id="buildBadge">v4.34 FILL FOR REAL</span></div>
       <div class="brand-sub">Swing Liquidity Targets • 1:2 R:R Filter • Auto Trade Lifecycle &amp; Screenshot Journal</div>
     </div>
   </div>
@@ -571,6 +582,7 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
             <th>SL</th>
             <th>TP1 · 50%</th>
             <th>R:R</th>
+            <th>Why This Trade</th>
             <th>Result</th>
             <th>PnL (R)</th>
             <th>PnL ($)</th>
@@ -692,6 +704,10 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
       <button class="btn" id="btnCloseModal">✕ Close</button>
     </div>
     <div id="modalMeta" style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;font-size:12px;"></div>
+    <div id="modalWhyWrap" style="margin-top:10px;padding:9px 11px;border:1px solid var(--border);border-radius:8px;background:var(--surface-2);">
+      <div style="font-size:9.5px;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-muted);font-weight:700;">Why this trade</div>
+      <div id="modalWhy" style="margin-top:3px;font-size:11.5px;line-height:1.5;color:var(--text-secondary);"></div>
+    </div>
     <div class="modal-imgs">
       <div>
         <div class="shot-cap" id="shotCapEntry">1. Entry snapshot — structure at the moment of entry</div>
@@ -1387,6 +1403,8 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
     activeTrade: null,     // Mirror of the primary live trade (first ACTIVE, else first PENDING)
     journal: [],           // Closed trades (metadata only — charts live in IndexedDB)
     settledZoneIds: new Set(), // Zones already traded/cancelled this session (blocks journal spam)
+    finishedIds: new Set(),    // trades THIS tab ended — the only ones another tab may delete
+    lastSyncAt: 0,            // when this tab last merged someone else's write
     lastFilteredZoneId: null,  // De-duplicates the FILTERED event-stream lines
     lastArmAt: 0,
     shotCache: new Map(),  // trade id -> { open, close } data URLs (session cache)
@@ -1395,7 +1413,7 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
   };
 
   /* Bumped on every rebuild — check this in the console to prove which build your browser loaded. */
-  const BUILD_STAMP = '2026-10-22 14:45 · v4.28 · swept swing levels no longer count as room to target';
+  const BUILD_STAMP = '2026-10-23 23:05 · v4.34 · a pending order only exists at the zone, and a two-leg plan must have room for both legs';
 
   let chart = null, candleSeries = null, volSeries = null, overlay = null, octx = null;
   let drawQueued = false;
@@ -1653,8 +1671,13 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
       /* The partial is FIXED at 1:2, so a setup needs 2R of room no matter what the minimum filter
          says. With minRR below 2.0 the filter alone would admit a setup whose TP1 already sits past
          the swing — which is exactly the "1:3 that isn't really there" case. Both conditions apply. */
-      const passesRR = nearestRoomR >= cfg.minRR && nearestRoomR >= PARTIAL_R;
+      /* The partial is fixed at 1:2. A setup whose structure sits exactly AT 2R produced
+         "TP1 4017.76 / TP2 4017.76" — two legs at the same price, i.e. a runner that does not exist.
+         A real two-leg plan needs a sliver of room beyond the partial. */
+      const MIN_RUNNER_R = 0.10;
+      const passesRR = nearestRoomR >= cfg.minRR && nearestRoomR >= PARTIAL_R + MIN_RUNNER_R;
       const roomShortOfPartial = nearestRoomR < PARTIAL_R;
+      const roomShortOfRunner = !roomShortOfPartial && nearestRoomR < PARTIAL_R + MIN_RUNNER_R;
       const tp1Obj = { price: tp1, src: '1:2 · book 50%' };
       const tp2Obj = { price: tp2, src: `${nearestSrc} · close 50% (1:${finalRUsed.toFixed(2)})` };
 
@@ -1684,7 +1707,7 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
       return {
         id: zone.id, zone, dir, grade, entry, sl, tp1, tp2,
         tp1Src: tp1Obj.src, tp2Src: tp2Obj.src,
-        risk, rr, rr2, roomR, nearestSrc, nearestPrice, nextRoomR, nextSrc, passesRR, roomShortOfPartial,
+        risk, rr, rr2, roomR, nearestSrc, nearestPrice, nextRoomR, nextSrc, passesRR, roomShortOfPartial, roomShortOfRunner,
         riskUsd, rewardUsd, lots,
         checks: { htfAligned, bothHtfAligned, isFresh, hasVol: zone.hasVol, swept: zone.sweptLiquidity, passesRR }
       };
@@ -1998,12 +2021,23 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
        never be tracked while a 5M trade held the slot, so good setups silently went unrecorded. */
     if (state.currentSetup && state.currentSetup.passesRR) {
       const s = state.currentSetup;
+      /* judge the setup on the close of ITS OWN timeframe, not whatever chart is on screen */
+      const ownBar = candleForTrade({ tf: s.zone && s.zone.tf }, latestCandle);
+      const ownPrice = (ownBar && Number.isFinite(ownBar.close)) ? ownBar.close : price;
       const zoneKey = s.zone && s.zone.id;
       const alreadySettled = zoneKey && state.settledZoneIds.has(zoneKey);
       const cooledDown = Date.now() - state.lastArmAt > 60 * 1000;
       const busyTf = state.liveTrades.some(t => t.tf === s.zone.tf);
-      const act = setupActionability(s, price);
-      if (!alreadySettled && cooledDown && !busyTf && act.ok) armTradeFromSetup(s, false);
+      /* ARM ONLY AT THE ZONE.
+         `act.ok` means "within 2.5R and on the right side", which armed setups that were almost two
+         full R away from their own entry — and whose target had often already been reached. Those
+         could only end one way: "price ran to TP1 before the entry filled". Measured live, the engine
+         armed a SELL at 4030.21 with price at 4025.99 whose TP1 was 4025.95 — four cents in front of
+         price. A pending order is only real when price is AT the level, so the gate is act.live
+         (inside the band, or within ZONE_LIVE_R of the entry on the correct side). The touch itself is
+         then caught by the bar's high/low, not by its close. */
+      const act = setupActionability(s, ownPrice);
+      if (!alreadySettled && cooledDown && !busyTf && act.live) armTradeFromSetup(s, false);
     }
 
     if (!state.liveTrades.length) { syncPrimaryTrade(); return; }
@@ -2014,8 +2048,12 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
          PENDING that dies without a fill-> dropped silently, terminal stream only.
        No CANCELLED rows, no "missed TP", no "no fill": a setup that never filled was never a trade. */
     for (const tr of state.liveTrades.slice()) {
-      // the candle for THIS trade's timeframe
+      /* THE CANDLE FOR THIS TRADE'S OWN TIMEFRAME, AND ONLY ITS PRICE.
+         `price` is the close of whatever chart is open. Mixing it into a trade's stop/target test
+         meant that switching the chart to 4H could book the 5M trade's first leg (or stop it out)
+         on a 4H close the 5M series never traded. Every test below now uses this trade's own bar. */
       const bar = candleForTrade(tr, latestCandle);
+      const tPrice = (bar && Number.isFinite(bar.close)) ? bar.close : price;
 
       if (tr.status === 'PENDING') {
         /* Abandon a setup that has sat unfilled for hours. Without this a pending row can linger
@@ -2026,16 +2064,16 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
         }
         const touchedBuy  = tr.dir === 'BUY'  && bar.low  <= tr.entry && bar.high >= tr.entry;
         const touchedSell = tr.dir === 'SELL' && bar.high >= tr.entry && bar.low  <= tr.entry;
-        const insideZoneNow = (tr.dir === 'BUY'  && price <= tr.entry && price > tr.sl)
-                           || (tr.dir === 'SELL' && price >= tr.entry && price < tr.sl);
+        const insideZoneNow = (tr.dir === 'BUY'  && tPrice <= tr.entry && tPrice > tr.sl)
+                           || (tr.dir === 'SELL' && tPrice >= tr.entry && tPrice < tr.sl);
 
         if (touchedBuy || touchedSell || insideZoneNow) {
           tr.status = 'ACTIVE';
           tr.openedAt = Date.now();
           triggerAlert(`Trade ACTIVE (${tr.dir} ${tr.grade})`, `${tr.tf.toUpperCase()} entered @ $${tr.entry.toFixed(2)} | SL $${tr.sl.toFixed(2)} | TP1 $${tr.tp1.toFixed(2)} (1:${tr.rr.toFixed(2)})`, tr.dir);
         } else {
-          const invalidated = tr.dir === 'BUY' ? price < tr.sl : price > tr.sl;
-          const ranToTarget = tr.dir === 'BUY' ? price >= tr.tp1 : price <= tr.tp1;
+          const invalidated = tr.dir === 'BUY' ? tPrice < tr.sl : tPrice > tr.sl;
+          const ranToTarget = tr.dir === 'BUY' ? tPrice >= tr.tp1 : tPrice <= tr.tp1;
           if (invalidated || ranToTarget) {
             dropTrade(tr, invalidated ? 'zone broke before price reached the entry'
                                       : 'price ran to TP1 before the entry filled');
@@ -2050,9 +2088,9 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
          Conservative tie-break kept: if the stop and a target are touched in the same bar, the
          stop wins for the remaining size. */
       if (tr.status === 'ACTIVE') {
-        const slHit = tr.dir === 'BUY' ? (bar.low <= tr.sl || price <= tr.sl) : (bar.high >= tr.sl || price >= tr.sl);
-        const partHit = tr.dir === 'BUY' ? (bar.high >= tr.tp1 || price >= tr.tp1) : (bar.low <= tr.tp1 || price <= tr.tp1);
-        const finalHit = tr.dir === 'BUY' ? (bar.high >= tr.tp2 || price >= tr.tp2) : (bar.low <= tr.tp2 || price <= tr.tp2);
+        const slHit = tr.dir === 'BUY' ? (bar.low <= tr.sl || tPrice <= tr.sl) : (bar.high >= tr.sl || tPrice >= tr.sl);
+        const partHit = tr.dir === 'BUY' ? (bar.high >= tr.tp1 || tPrice >= tr.tp1) : (bar.low <= tr.tp1 || tPrice <= tr.tp1);
+        const finalHit = tr.dir === 'BUY' ? (bar.high >= tr.tp2 || tPrice >= tr.tp2) : (bar.low <= tr.tp2 || tPrice <= tr.tp2);
 
         // Leg 1 — book half at the 1:2 level
         if (!tr.booked50 && partHit) {
@@ -2093,6 +2131,20 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
   function dropFromLive(tr) {
     const i = state.liveTrades.indexOf(tr);
     if (i >= 0) state.liveTrades.splice(i, 1);
+    /* WATCHDOG. A filled trade must never leave tracking without a record somewhere. If it somehow
+       does, say so loudly in the terminal stream instead of letting it evaporate. */
+    if (tr.status === 'ACTIVE') {
+      const inJournal = state.journal.some(j => j.id === tr.id);
+      const inSkips = state.skipped.some(k => k.id === tr.id);
+      if (!inJournal && !inSkips) {
+        state.skipped.unshift({ id: tr.id, tf: tr.tf, dir: tr.dir, grade: tr.grade,
+          entry: tr.entry, sl: tr.sl, tp1: tr.tp1,
+          reason: 'untracked without a closed record — recovered by the watchdog', wouldHaveR: null, at: Date.now() });
+        state.skipped = state.skipped.slice(0, 40);
+        persistSkipped();
+        log(`[WATCHDOG] ${tr.tf.toUpperCase()} ${tr.dir} left tracking with no record — kept in the skip ledger with entry $${tr.entry.toFixed(2)}.`, '#ef4444');
+      }
+    }
     syncPrimaryTrade();
   }
 
@@ -2100,6 +2152,7 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
      without a trace either, otherwise the chart shows a perfect winner and the journal shows nothing.
      Every skip is kept in state.skipped and surfaced under the journal table. */
   function dropTrade(tr, why) {
+    state.finishedIds.add(tr.id);
     if (tr.zoneId) state.settledZoneIds.add(tr.zoneId);
     const price = state.livePrice;
     const hitTp1 = price != null && (tr.dir === 'BUY' ? price >= tr.tp1 : price <= tr.tp1);
@@ -2134,18 +2187,78 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
     state.activeTrade = state.liveTrades.find(t => t.status === 'ACTIVE') || state.liveTrades[0] || null;
   }
 
+  /* ---------------- WHY THIS TRADE (v4.31) ----------------
+     A journal row that only says "SELL A, 1:2" never explains itself. This builds one line out of
+     the exact booleans the grader already used, so the reason on the row cannot disagree with the
+     grade, the panel check-list, or the R:R filter — no adjectives, no hindsight. */
+  function setupWhy(s, sessionShort) {
+    if (!s) return '';
+    const c = s.checks || {};
+    const z = s.zone || {};
+    const side = s.dir === 'BUY' ? 'demand' : 'supply';
+    const tf = z.tf ? String(z.tf).toUpperCase() : '';
+    const band = Number.isFinite(z.top) && Number.isFinite(z.bottom)
+      ? `$${num2(Math.min(z.top, z.bottom))}–$${num2(Math.max(z.top, z.bottom))}` : '';
+    const parts = [];
+    parts.push([tf, side, band].filter(Boolean).join(' '));
+    if (s.momentum) {
+      parts.push(`no retest came — market entry $${num2(s.entry)}, stop beyond the zone at $${num2(s.sl)}`);
+    }
+    parts.push(c.bothHtfAligned ? '4H+1H bias aligned'
+             : c.htfAligned ? 'one HTF bias aligned'
+             : 'counter to the HTF bias');
+    parts.push(c.isFresh ? 'fresh zone' : 'zone already retested');
+    parts.push(c.hasVol ? 'displacement on volume > SMA20' : 'no volume expansion');
+    parts.push(c.swept ? 'liquidity sweep confirmed' : 'internal liquidity only');
+    if (Number.isFinite(s.roomR)) {
+      parts.push(s.roomR >= 50 ? 'open air to the target'
+        : `${Number(s.roomR).toFixed(2)}R of room to ${s.nearestSrc || 'structure'}`);
+    }
+    parts.push(`plan: 50% @ 1:2 → 50% @ 1:${Number(s.rr2 || s.rr || 3).toFixed(2)}`);
+    if (sessionShort) parts.push(`${sessionShort} session`);
+    return parts.join(' · ');
+  }
+
+  /* Old rows (and anything restored from storage without the field) still have to say something
+     true. Reconstruct only from what the row actually stores, and say so instead of inventing. */
+  function journalWhy(t) {
+    if (!t) return '';
+    if (t.why) return t.why;
+    const side = t.dir === 'BUY' ? 'demand' : 'supply';
+    const parts = [];
+    if (Number.isFinite(Number(t.zoneBottom)) && Number.isFinite(Number(t.zoneTop))) {
+      parts.push(`${(t.tf || '').toUpperCase()} ${side} $${num2(t.zoneBottom)}–$${num2(t.zoneTop)}`);
+    } else {
+      parts.push(`${(t.tf || '').toUpperCase()} ${side} zone`);
+    }
+    if (t.session) parts.push(`${t.session} session`);
+    if (Number.isFinite(Number(t.rr))) parts.push(`plan: 50% @ 1:2 → 50% @ 1:${Number(t.rr2 || 3).toFixed(2)}`);
+    parts.push('confluence not recorded (row predates v4.31)');
+    return parts.join(' · ');
+  }
+
   function armTradeFromSetup(s, manual = false) {
     if (!s) return;
     /* A plan whose two legs sit at the same price is not a two-leg plan: it means the room falls
        short of the fixed 1:2 partial. Refuse it rather than journalling "50% @ 1:2" twice. */
     if (Math.abs((s.tp2 || 0) - (s.tp1 || 0)) < 1e-9) {
       log(`Not tracked — this setup has ${(s.roomR || 0).toFixed(2)}R of room, short of the 1:2 partial, so both exits would sit at $${(s.tp1 || 0).toFixed(2)}.`, '#f59e0b');
-      return;
+      return null;
+    }
+    /* A setup whose target is already behind price can never be filled from here — arming it would
+       park a PENDING row that dies without a trade. "Track Setup Now" on an EXPIRED card used to do
+       exactly that. Refuse out loud instead of creating a phantom. */
+    if (s.zone && state.livePrice != null) {
+      const act = setupActionability(s, state.livePrice);
+      if (act.missed || act.beyondZone) {
+        log(`Not tracked — this ${String(s.zone.tf).toUpperCase()} ${s.dir} is done: ${act.reason}.`, '#f59e0b');
+        return null;
+      }
     }
     // one live setup per timeframe, and never the same zone twice
-    if (state.liveTrades.some(t => t.tf === s.zone.tf)) return;
-    if (state.liveTrades.some(t => t.zoneId === s.zone.id)) return;
-    if (state.liveTrades.length >= 4) return;
+    if (state.liveTrades.some(t => t.tf === s.zone.tf)) return null;
+    if (state.liveTrades.some(t => t.zoneId === s.zone.id)) return null;
+    if (state.liveTrades.length >= 4) return null;
     const sess = Quant.getSession();
     const tr = {
       id: 'TR_' + Date.now() + '_' + Math.floor(Math.random() * 999),
@@ -2170,6 +2283,7 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
       booked50: false,
       realizedR: 0,
       legs: [],
+      why: setupWhy(s, sess.short),
       createdAt: Date.now(),
       openedAt: null,
       closedAt: null
@@ -2181,6 +2295,7 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
     log(`[TRACK] ${s.zone.tf.toUpperCase()} ${s.dir} (${s.grade}) Pending @ $${s.entry.toFixed(2)} | TP1 $${s.tp1.toFixed(2)} (1:${s.rr.toFixed(2)})`, '#60a5fa');
     updateDashboardUI();
     renderJournalTable();
+    return tr;   // callers/tests can see what was actually tracked (null = refused)
   }
 
   /* ---------------- 5. HISTORICAL BACKTEST ENGINE (300 BARS) ---------------- */
@@ -2252,11 +2367,13 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
               const isWin = rMult > 0;
               if (isWin) wins++; else losses++;
               netR += rMult;
+              const btSess = Quant.getSession(bar.time).short;
               btTrades.push({
                 id: 'BT_' + bar.time + '_' + z.id,
                 mode: 'BACKTEST',
                 tf,
-                session: Quant.getSession(bar.time).short,
+                session: btSess,
+                why: setupWhy(setup, btSess),
                 dir: setup.dir,
                 grade: setup.grade,
                 entry: setup.entry,
@@ -2346,9 +2463,24 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
 
   /* The armed/pending trade used to live only in memory, so refreshing the page (or a
      reconnect) threw it away and it never reached the journal. It is now persisted. */
+  /* Same lesson as the journal: a tab knows only about ITS trades. A second tab used to call this
+     with an empty list and erase the shared in-flight trade, so the tab that was actually tracking
+     it lost the position on its next reload — no journal row, no skip entry, no trace.
+     A tab may now remove only trades it ended itself (`state.finishedIds`). */
   function persistActiveTrade() {
     try {
-      if (state.liveTrades.length) localStorage.setItem(ACTIVE_KEY, JSON.stringify(state.liveTrades));
+      let stored = [];
+      try {
+        const raw = localStorage.getItem(ACTIVE_KEY);
+        stored = raw ? JSON.parse(raw) : [];
+      } catch (e) { stored = []; }
+      if (!Array.isArray(stored)) stored = [];
+      const mineIds = new Set(state.liveTrades.map(t => t.id));
+      const keep = stored.filter(t => t && t.id && !mineIds.has(t.id)
+        && !state.finishedIds.has(t.id)
+        && (t.status === 'ACTIVE' || Date.now() - (t.createdAt || 0) < pendingTtl(t.tf)));
+      const out = state.liveTrades.concat(keep).slice(0, 8);
+      if (out.length) localStorage.setItem(ACTIVE_KEY, JSON.stringify(out));
       else localStorage.removeItem(ACTIVE_KEY);
     } catch (e) {}
   }
@@ -2358,9 +2490,18 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
       const raw = localStorage.getItem(ACTIVE_KEY);
       if (!raw) return;
       const parsed = JSON.parse(raw);
-      const list = (Array.isArray(parsed) ? parsed : [parsed])   // migrate the old single-trade payload
-        .filter(tr => tr && Number.isFinite(tr.entry))
-        .filter(tr => Date.now() - (tr.createdAt || 0) < 12 * 60 * 60 * 1000);   // drop stale
+      const all = (Array.isArray(parsed) ? parsed : [parsed])   // migrate the old single-trade payload
+        .filter(tr => tr && Number.isFinite(tr.entry));
+      /* An ACTIVE trade is a live position, not a stale order: it is restored however old it is.
+         Only an unfilled PENDING order expires — and when it does it goes to the skip ledger, so it
+         is never erased without a trace. */
+      const expired = all.filter(tr => tr.status !== 'ACTIVE' && Date.now() - (tr.createdAt || 0) >= pendingTtl(tr.tf));
+      expired.forEach(tr => state.skipped.unshift({
+        id: tr.id, tf: tr.tf, dir: tr.dir, grade: tr.grade, entry: tr.entry, sl: tr.sl, tp1: tr.tp1,
+        reason: 'pending order expired before the page was reloaded (never filled)', wouldHaveR: null, at: Date.now()
+      }));
+      if (expired.length) { state.skipped = state.skipped.slice(0, 40); persistSkipped(); }
+      const list = all.filter(tr => tr.status === 'ACTIVE' || Date.now() - (tr.createdAt || 0) < pendingTtl(tr.tf));
       if (!list.length) { localStorage.removeItem(ACTIVE_KEY); return; }
       state.liveTrades = list;
       syncPrimaryTrade();
@@ -2394,8 +2535,34 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
     const nSkip = state.skipped.length;
     const skipTxt = nSkip ? ` · ${nSkip} skipped (never filled)` : '';
     const total = state.journal.length + inFlight.length;
-    el.textContent = `${total} record${total === 1 ? '' : 's'} · ${closed} closed (WIN/LOSS) · LIVE ${live} / BACKTEST ${bt}${inflight}${skipTxt}`;
+    /* If the browser refused the write, say so on the row itself — a silent memory-only journal is
+       exactly how a row the user saw disappear later. */
+    const unsaved = state.journalWriteOk === false ? ' · ⚠ last save failed (storage full)' : '';
+    el.textContent = `${total} record${total === 1 ? '' : 's'} · ${closed} closed (WIN/LOSS) · LIVE ${live} / BACKTEST ${bt}${inflight}${skipTxt}${unsaved}`;
     $('navJournalCount').textContent = total;
+  }
+
+  function readStoredJournal() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      const arr = raw ? JSON.parse(raw) : [];
+      return Array.isArray(arr) ? arr.filter(r => r && r.id) : [];
+    } catch (e) { return []; }
+  }
+
+  /* MERGE, NEVER OVERWRITE.
+     This used to write `state.journal` straight over the stored list. localStorage is shared by
+     every tab and window of the origin, so a second tab that was opened before a trade closed held
+     an older, shorter list — the first time it saved anything (a backtest, a filter, a reload) it
+     erased the closed trade from the shared journal, and the next reload showed no record of it.
+     That is the "my trade disappeared from the journal" report: nothing to do with the demand zone
+     the target sat in. Two sources, unioned by id, newest first. */
+  function mergeJournalLists(mine, stored) {
+    const byId = new Map();
+    (stored || []).forEach(r => { if (r && r.id) byId.set(r.id, r); });
+    (mine || []).forEach(r => { if (r && r.id) byId.set(r.id, r); });   // this tab wins on conflict
+    return Array.from(byId.values())
+      .sort((a, b) => (b.closedAt || b.createdAt || 0) - (a.closedAt || a.createdAt || 0));
   }
 
   function persistJournal() {
@@ -2405,19 +2572,23 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
         return true;
       } catch (e) { return false; }
     };
-    let list = state.journal.slice(0, 200);
+    let list = mergeJournalLists(state.journal, readStoredJournal()).slice(0, 200);
     let ok = write(list);
     while (!ok && list.length > 1) {
       list = list.slice(0, Math.max(1, Math.floor(list.length * 0.7)));
       ok = write(list);
     }
+    state.journalWriteOk = ok;
     if (!ok) log('WARNING: browser storage full — journal is kept in memory only for this session.', '#f59e0b');
+    // adopt the merged view so this tab shows a trade another tab closed
+    if (ok && list.length !== state.journal.length) state.journal = list;
     $('navJournalCount').textContent = state.journal.length;
   }
 
   function saveTradeToJournal(tr) {
     delete tr.entryImg;
     delete tr.exitImg;
+    state.finishedIds.add(tr.id);
     state.journal.unshift(tr);
     persistJournal();
     renderJournalTable();
@@ -2522,7 +2693,7 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
 
     const tbody = $('journalTbody');
     if (!rows.length) {
-      tbody.innerHTML = `<tr><td colspan="14" style="text-align:center;color:var(--text-muted);padding:24px;">No trade records match filters yet. Click "▶ Run Backtest (300 Bars)" in the top bar or wait for a live trade to close.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="15" style="text-align:center;color:var(--text-muted);padding:24px;">No trade records match filters yet. Click "▶ Run Backtest (300 Bars)" in the top bar or wait for a live trade to close.</td></tr>`;
       return;
     }
 
@@ -2551,6 +2722,7 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
         <td class="mono">$${Number(t.sl).toFixed(2)}</td>
         <td class="mono">$${Number(t.tp1).toFixed(2)}</td>
         <td class="mono">1:${Number(t.rr).toFixed(2)}</td>
+        <td class="why-cell" title="${journalWhy(t).replace(/"/g, '&quot;')}">${journalWhy(t)}</td>
         <td><span class="pill ${resClass}" title="${resTitle}">${resText}</span></td>
         <td class="mono" title="${legNote}"${live ? ` id="jLiveR_${idx}" data-live-cell="r"` : ''} style="color:${t.rMultiple > 0 ? 'var(--buy)' : t.rMultiple < 0 ? 'var(--sell)' : 'var(--text-secondary)'};">${live && !t._filled ? '—' : (t.rMultiple > 0 ? '+' : '') + Number(t.rMultiple || 0).toFixed(2) + 'R'}</td>
         <td class="mono"${live ? ` id="jLivePnl_${idx}" data-live-cell="pnl"` : ''} style="color:${t.pnlUsd > 0 ? 'var(--buy)' : t.pnlUsd < 0 ? 'var(--sell)' : 'var(--text-secondary)'};">${live && !t._filled ? '—' : (t.pnlUsd >= 0 ? '+$' : '-$') + Math.abs(t.pnlUsd || 0).toFixed(2)}</td>
@@ -2591,6 +2763,8 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
       <span class="pill ${t.mode === 'BACKTEST' ? 'pill-warn' : 'pill-neutral'}">${t.mode || 'LIVE'}</span>
     `;
 
+    if ($('modalWhy')) $('modalWhy').textContent = journalWhy(t);
+
     // Clear stale images from the previously opened trade before loading the new pair
     const imgOpen = $('modalImgOpen'), imgClose = $('modalImgClose');
     const fbOpen = $('modalFbOpen'), fbClose = $('modalFbClose');
@@ -2621,7 +2795,7 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
       log('Nothing to export yet — run a backtest or close a live trade first.', '#f59e0b');
       return;
     }
-    const headers = ['Date','Mode','TF','Session','Direction','Grade','Entry','SL','TP1','TP2','RR','Result','PnL_R','PnL_USD','ZoneBottom','ZoneTop'];
+    const headers = ['Date','Mode','TF','Session','Direction','Grade','Entry','SL','TP1','TP2','RR','Result','PnL_R','PnL_USD','ZoneBottom','ZoneTop','WhyThisTrade'];
     const lines = [headers.join(',')];
     state.journal.forEach(t => {
       lines.push([
@@ -2630,7 +2804,8 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
         num2(t.entry), num2(t.sl), num2(t.tp1), num2(t.tp2),
         num2(t.rr), t.result, t.rMultiple, t.pnlUsd,
         t.zoneBottom === undefined ? '' : num2(t.zoneBottom),
-        t.zoneTop === undefined ? '' : num2(t.zoneTop)
+        t.zoneTop === undefined ? '' : num2(t.zoneTop),
+        journalWhy(t)
       ].map(csvCell).join(','));
     });
     const blob = new Blob([lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
@@ -3499,6 +3674,74 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
     el.textContent = `forming ${String(tf).toUpperCase()} ${near.type} · entry $${edge.toFixed(2)} · 1 candle short`;
   }
 
+  /* ONE SCREEN, ONE STORY.
+     With a 5M SELL open and running in profit, the Signal & Grade card used to describe the nearest
+     NEW candidate and stamp it "SKIP" — read as "your trade was skipped" while the trade was live
+     and green. It also showed a different entry (4027.16) from the trade that actually filled
+     (4027.33). While a trade is open on the charted timeframe, these cards describe THAT trade. */
+  function renderOpenTradeCards(tr, cfg) {
+    const tfTag = String(tr.tf || state.activeTF).toUpperCase();
+    const pNow = state.livePrice;
+    const risk = Math.abs(tr.entry - tr.sl);
+    const filled = tr.status === 'ACTIVE';
+    const floatR = (filled && pNow != null && risk > 0)
+      ? ((tr.dir === 'BUY' ? pNow - tr.entry : tr.entry - pNow) / risk) : null;
+    const booked = !!tr.booked50;
+    const banked = booked ? 0.5 * Number(tr.rr) : 0;
+    const total = booked ? banked + 0.5 * (floatR || 0) : (floatR || 0);
+    const rr2 = Number(tr.rr2 || tr.rr);
+
+    const sigPill = $('stSignalPill'), grPill = $('stGradePill'), rrPill = $('stRRFilterPill');
+    sigPill.textContent = `${filled ? 'OPEN' : 'PENDING'} · ${tfTag} ${tr.dir}`;
+    sigPill.title = filled ? `filled at $${num2(tr.entry)} — this is the ${tfTag} trade you are in`
+                           : `waiting for price to touch $${num2(tr.entry)}`;
+    sigPill.className = 'pill ' + (filled ? (tr.dir === 'BUY' ? 'pill-buy' : 'pill-sell') : 'pill-warn');
+
+    grPill.textContent = `Grade ${tr.grade || '—'}${booked ? ' · 50% banked' : ''}`;
+    grPill.className = 'pill ' + (booked ? 'pill-buy' : 'pill-neutral');
+
+    rrPill.textContent = filled ? `${total >= 0 ? '+' : ''}${total.toFixed(2)}R live` : 'awaiting fill';
+    rrPill.className = 'pill ' + (total > 0 ? 'pill-buy' : total < 0 ? 'pill-sell' : 'pill-neutral');
+
+    $('stRRVal').textContent = `1:${Number(tr.rr).toFixed(2)} → 1:${rr2.toFixed(2)}`;
+    if ($('stSetupTfTag')) $('stSetupTfTag').textContent = tfTag;
+    $('stTargetsSub').textContent = `${tfTag} · 50% @ $${num2(tr.tp1)} (1:${Number(tr.rr).toFixed(1)}) | 50% @ $${num2(tr.tp2)} (1:${rr2.toFixed(1)})`;
+
+    $('stSignalSub').textContent = filled
+      ? `${tfTag} ${tr.dir} filled @ $${num2(tr.entry)} · SL $${num2(tr.sl)} · `
+        + (booked ? `+${banked.toFixed(2)}R banked, ` : '')
+        + `${total >= 0 ? '+' : ''}${total.toFixed(2)}R live`
+      : `${tfTag} ${tr.dir} pending @ $${num2(tr.entry)} · SL $${num2(tr.sl)} · waiting for the touch`;
+
+    // Position tool shows the trade's own numbers — never a candidate's
+    $('pDirGrade').textContent = `${tr.dir} ${filled ? 'OPEN' : 'PENDING'} · ${tfTag}`;
+    $('pDirGrade').style.color = tr.dir === 'BUY' ? 'var(--buy)' : 'var(--sell)';
+    $('pEntry').textContent = '$' + num2(tr.entry);
+    $('pSL').textContent = '$' + num2(tr.sl);
+    $('pTP1').textContent = '$' + num2(tr.tp1);
+    $('pTP2').textContent = '$' + num2(tr.tp2);
+    $('pRR').textContent = `1 : ${Number(tr.rr).toFixed(2)}`;
+    $('pLots').textContent = `${num2(tr.lots || 0)} Lots`;
+    $('pUsd').textContent = `-$${num2(tr.riskUsd || 0, 0)} / +$${num2((tr.riskUsd || 0) * Number(tr.rr || 2), 0)}`;
+
+    $('gcBias').textContent = tr.dir === 'BUY' ? '✓ Long' : '✓ Short';
+    $('gcFresh').textContent = booked ? '✓ 50% booked' : (filled ? '✓ Filled' : '— Pending');
+    $('gcVol').textContent = '—'; $('gcSweep').textContent = '—';
+    $('gcRR').textContent = `✓ 1:${Number(tr.rr).toFixed(2)} → 1:${rr2.toFixed(2)}`;
+
+    const fc = $('filterCard');
+    fc.hidden = false;
+    $('fcTag').textContent = 'IN TRADE';
+    $('fcRR').textContent = `${tfTag} plan 1:${Number(tr.rr).toFixed(2)} → 1:${rr2.toFixed(2)} · `
+      + (filled ? `${total >= 0 ? '+' : ''}${total.toFixed(2)}R live` : 'awaiting fill');
+    $('fcPrices').textContent = `Entry ${num2(tr.entry)}   SL ${num2(tr.sl)}   TP1 ${num2(tr.tp1)}   TP2 ${num2(tr.tp2)}`;
+    $('fcReason').textContent = `You are already in a ${tfTag} ${tr.dir}. The ${tfTag} slot is busy, so new `
+      + `${tfTag} candidates are not taken while this one is live — that is a slot rule, not a verdict on them. `
+      + `Other timeframes are still scanned.`;
+    $('fcPill').textContent = filled ? 'LIVE' : 'PENDING';
+    $('fcPill').className = 'pill ' + (filled ? (tr.dir === 'BUY' ? 'pill-buy' : 'pill-sell') : 'pill-warn') + ' fc-pill';
+  }
+
   function updateDashboardUI() {
     const p = state.livePrice;
     if (p != null) $('stPrice').textContent = '$' + p.toFixed(2);
@@ -3521,8 +3764,11 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
     // Setup & R:R cards
     const s = state.currentSetup;
     const cfg = getCfg();
+    const openTr = state.liveTrades.find(t => t.tf === state.activeTF) || null;
 
-    if (s) {
+    if (openTr) {
+      renderOpenTradeCards(openTr, cfg);
+    } else if (s) {
       const sigPill = $('stSignalPill'), grPill = $('stGradePill'), rrPill = $('stRRFilterPill');
       const setupTF = (s.zone && s.zone.tf ? s.zone.tf : state.activeTF).toUpperCase();
       const act = setupActionability(s, p);
@@ -3564,7 +3810,11 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
         : 'pill pill-neutral';
 
       const roomTxt = s.roomR >= 50 ? 'open air' : `${s.roomR.toFixed(2)}R`;
-      $('stRRVal').textContent = `1:${s.rr.toFixed(2)} → 1:${s.rr2.toFixed(2)}`;
+      /* A setup with less than 2R of room has no valid two-leg plan, so printing
+         "1:2.00 → 1:2.00" was a plan that does not exist. Say what is missing instead. */
+      $('stRRVal').textContent = !s.passesRR
+        ? `no 1:2 plan · ${roomTxt} room`
+        : `1:${s.rr.toFixed(2)} → 1:${s.rr2.toFixed(2)}`;
       const rrCardLbl = $('stSetupTfTag');
       if (rrCardLbl) { rrCardLbl.textContent = setupTF; }
       /* This card sits right next to the signal card, so it must not contradict it: an expired
@@ -3627,12 +3877,17 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
           + (s.nearestPrice ? ` $${s.nearestPrice.toFixed(2)}` : '') + beyond;
         $('fcPrices').textContent =
           `Entry ${s.entry.toFixed(2)}   SL ${s.sl.toFixed(2)}   TP1 ${s.tp1.toFixed(2)}`;
+        /* The nearest structure is where TP would SIT, so name it as the target. The old wording
+           ("room to the swing low") read like a bullish argument for a SELL. */
         $('fcReason').textContent =
-          `${s.dir} ${s.zone.tf.toUpperCase()} ${s.zone.type} setup skipped — only ${s.roomR.toFixed(2)}R of clear room to the ${s.nearestSrc.toLowerCase()}`
+          `${s.dir} ${s.zone.tf.toUpperCase()} ${s.zone.type} not taken — the ${s.nearestSrc.toLowerCase()}`
           + (s.nearestPrice ? ` at $${s.nearestPrice.toFixed(2)}` : '')
+          + ` is the level your take-profit would sit at, and it is only ${s.roomR.toFixed(2)}R away`
           + (s.roomShortOfPartial
-              ? `, and the 1:2 partial is fixed at 2.00R, so your half-size exit would sit past that structure. Lowering the filter will not help; wait for a zone with 2R of room.`
-              : `, but your Minimum R:R Filter is ${cfg.minRR.toFixed(2)}. Lower it in Settings to take this one.`);
+              ? `. The 1:2 partial is fixed at 2.00R, so the half-size exit would land past that target. Lowering the filter will not help — wait for a zone with 2R of clear room.`
+              : s.roomShortOfRunner
+              ? `. That is enough for the 1:2 partial but leaves the 1:3 runner with nowhere to go, so the two exits would sit at the same price. Wait for clear room past ${s.nearestPrice ? '$' + s.nearestPrice.toFixed(2) : 'that level'}.`
+              : `, under your Minimum R:R Filter of ${cfg.minRR.toFixed(2)}. Lower it in Settings to take this one.`);
         $('fcPill').textContent = 'SKIPPED';
         $('fcPill').className = 'pill pill-sell fc-pill';
         if (state.lastFilteredZoneId !== s.zone.id) {
@@ -3731,13 +3986,49 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
           + ` | 5M: ${countZones('5m')} | 15M: ${countZones('15m')}`
           + (hidden ? ` | +${hidden} mitigated hidden` : '');
       })();
+    /* If a whole side has nothing left, say so and say why. Bias does NOT hide zones — the list
+       is built from every unbroken zone regardless of HTF direction — but a broken (mitigated) zone
+       is excluded, and silence there reads as "the scanner forgot demand". */
+    const missing = ['demand', 'supply'].map(side => {
+      const unbroken = allFresh.filter(z => z.type === side).length;
+      if (unbroken) return '';
+      const broken = tfKeys.reduce((n, t) => {
+        const sc = state.analysis[t];
+        return n + (sc ? sc[side].filter(z => z.broken).length : 0);
+      }, 0);
+      if (!broken) return '';
+      return `<div style="padding:4px 0;color:var(--text-muted);font-style:italic;">
+        no unmitigated ${side} — all ${broken} on ${tfKeys.map(t => t.toUpperCase()).join('/')} already broken</div>`;
+    }).join('');
+    /* WHY A ZONE IS NOT ACTIVE — stated per row.
+       Two gates were silently closing: one live setup per timeframe (so a 5M zone cannot arm while
+       any 5M trade is open), and the R:R room rule. Neither was visible anywhere, so a perfectly
+       good-looking supply simply sat there doing nothing. */
+    const zoneTradeById = new Map(state.liveTrades.map(tr => [tr.zoneId, tr]));
+    const busyTfSet = new Set(state.liveTrades.map(tr => tr.tf));
+    const chipFor = z => {
+      const tr = zoneTradeById.get(z.id);
+      if (tr) return `<span class="zchip zchip-live">${tr.status}</span>`;
+      if (busyTfSet.has(z.tf)) return `<span class="zchip zchip-warn">${z.tf.toUpperCase()} slot busy</span>`;
+      if (z.tf !== state.activeTF) return '';
+      const sc2 = state.analysis[state.activeTF];
+      if (!sc2) return '';
+      const allZ2 = ['5m', '15m', '1h', '4h'].reduce((a, k) => a.concat(state.analysis[k]?.supply || [], state.analysis[k]?.demand || []), []);
+      const su = Quant.buildSwingSetup(z, allZ2, sc2.swings, state.bias4h, state.bias1h, getCfg());
+      if (!su) return `<span class="zchip zchip-warn">no plan</span>`;
+      const act2 = setupActionability(su, state.livePrice);
+      if (act2.missed) return `<span class="zchip zchip-warn">spent</span>`;
+      if (!su.passesRR) return `<span class="zchip zchip-warn">room ${su.roomR.toFixed(2)}R</span>`;
+      if (act2.live) return `<span class="zchip zchip-ok">AT ZONE</span>`;
+      return `<span class="zchip zchip-ok">ready ${act2.distR.toFixed(1)}R</span>`;
+    };
     $('sideZoneList').innerHTML = allFresh.slice().reverse().map(z => `
-      <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border-subtle);">
+      <div style="display:flex;justify-content:space-between;gap:6px;padding:4px 0;border-bottom:1px solid var(--border-subtle);">
         <span style="color:${z.type === 'supply' ? 'var(--sell)' : 'var(--buy)'};font-weight:700;">${z.tf.toUpperCase()} ${z.type.toUpperCase()}</span>
         <span>$${z.bottom.toFixed(2)} – $${z.top.toFixed(2)}</span>
-        <span style="color:var(--text-muted);">${z.rule}</span>
+        <span style="color:var(--text-muted);">${chipFor(z) || z.rule}</span>
       </div>
-    `).join('') || 'No unmitigated zones.';
+    `).join('') + missing || 'No unmitigated zones.';
   }
 
   /* ---------------- 10. WEBSOCKET STREAM ---------------- */
@@ -3879,6 +4170,36 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
   document.addEventListener('visibilitychange', () => { if (!document.hidden && !state.wsConnected) forceReconnect(); });
 
   /* ---------------- 11. EVENT BINDINGS & BOOT ---------------- */
+  /* Living in two tabs used to mean two different journals. When another tab writes, this one
+     re-reads and re-renders instead of sitting on a stale copy that will overwrite it later. */
+  function bindCrossTabSync() {
+    window.addEventListener('storage', e => {
+      if (e.key === STORAGE_KEY) {
+        const incoming = readStoredJournal();
+        const merged = mergeJournalLists(state.journal, incoming);
+        if (merged.length !== state.journal.length) {
+          state.journal = merged;
+          log(`[SYNC] journal updated from another tab — ${state.journal.length} record(s).`, '#60a5fa');
+        }
+        renderJournalTable();
+        renderStatsPage();
+      } else if (e.key === ACTIVE_KEY) {
+        let stored = [];
+        try { stored = e.newValue ? JSON.parse(e.newValue) : []; } catch (err) { stored = []; }
+        if (!Array.isArray(stored)) return;
+        const known = new Set(state.liveTrades.map(t => t.id));
+        const extra = stored.filter(t => t && t.id && !known.has(t.id) && !state.finishedIds.has(t.id));
+        if (extra.length) {
+          state.liveTrades = state.liveTrades.concat(extra);
+          syncPrimaryTrade();
+          renderJournalTable();
+          updateDashboardUI();
+          log(`[SYNC] ${extra.length} open setup(s) picked up from another tab.`, '#60a5fa');
+        }
+      }
+    });
+  }
+
   function bindEvents() {
     // Top Navigation Tabs
     document.querySelectorAll('.nav-tab').forEach(btn => {
@@ -3936,10 +4257,25 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
       }
     });
     $('btnCancelTrack').addEventListener('click', () => {
+      /* "Clear" used to empty the list outright: a trade that was already filled and running in
+         profit vanished with no row anywhere. Now every trade it removes leaves a ledger entry. */
+      state.liveTrades.slice().forEach(tr => {
+        state.finishedIds.add(tr.id);
+        state.skipped.unshift({
+          id: tr.id, tf: tr.tf, dir: tr.dir, grade: tr.grade, entry: tr.entry, sl: tr.sl, tp1: tr.tp1,
+          reason: tr.status === 'ACTIVE'
+            ? `untracked by hand while ${tr.status} (${(tr.booked50 ? '50% already booked at 1:2' : 'no leg booked')})`
+            : 'untracked by hand before the entry filled',
+          wouldHaveR: null, at: Date.now()
+        });
+      });
+      state.skipped = state.skipped.slice(0, 40);
+      persistSkipped();
       state.liveTrades = [];
       syncPrimaryTrade();
       persistActiveTrade();
       updateDashboardUI();
+      renderJournalTable();
       queueOverlayDraw();
     });
 
@@ -3973,10 +4309,11 @@ table.journal-table tbody tr:hover { background: var(--surface-2); }
     restoreActiveTrade();     // a trade that was pending/active before the reload keeps tracking
     initChart();
     bindEvents();
+    bindCrossTabSync();
     const ok = await syncAllData();
     if (ok) {
       connectWS();
-      log('SMC Gold Terminal v4.28 online — build ' + BUILD_STAMP + '. Structural Swing High/Low TP & 1:2 R:R Filter active. Footer R:R dots armed.', '#10b981');
+      log('SMC Gold Terminal v4.34 online — build ' + BUILD_STAMP + '. Structural Swing High/Low TP & 1:2 R:R Filter active. Footer R:R dots armed.', '#10b981');
     }
     setInterval(calibrateSpot, 60000);
   }
