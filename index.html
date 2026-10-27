@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>SMC Gold Terminal v4.44 — SMC / XAUUSD Terminal</title>
+<title>SMC Gold Terminal v4.45 — SMC / XAUUSD Terminal</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700;800&display=swap" rel="stylesheet">
@@ -342,7 +342,7 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
   <div class="brand">
     <div class="brand-logo">SMC</div>
     <div>
-      <div class="brand-title">SMC Gold Terminal <span class="pill pill-neutral" id="buildBadge">v4.44 MULTI-TF SLOTS</span></div>
+      <div class="brand-title">SMC Gold Terminal <span class="pill pill-neutral" id="buildBadge">v4.45 FIXED LOT</span></div>
       <div class="brand-sub">Swing Liquidity Targets • 1:2 R:R Filter • Auto Trade Lifecycle &amp; Screenshot Journal</div>
     </div>
   </div>
@@ -498,7 +498,7 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
             <div class="kv-box"><div class="k">TP1 · 50% (1:2)</div><div class="v" id="pTP1" style="color:var(--buy);">—</div></div>
             <div class="kv-box"><div class="k">TP2 · 50% (1:3)</div><div class="v" id="pTP2" style="color:var(--buy);">—</div></div>
             <div class="kv-box"><div class="k">Structural R:R</div><div class="v" id="pRR">—</div></div>
-            <div class="kv-box"><div class="k">Lot Size (fixed $ risk)</div><div class="v" id="pLots">—</div></div>
+            <div class="kv-box"><div class="k">Lot Size (fixed)</div><div class="v" id="pLots">—</div></div>
             <div class="kv-box"><div class="k">Risk $ / Reward $</div><div class="v" id="pUsd">—</div></div>
           </div>
 
@@ -654,8 +654,8 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
           <input type="number" id="setBalance" value="10000" step="500" style="width:120px;" />
         </div>
         <div class="setting-row">
-          <div><b>Risk Per Trade (%)</b><div style="font-size:11px;color:var(--text-muted);">Default 1.0% of account</div></div>
-          <input type="number" id="setRiskPct" value="1.0" step="0.25" style="width:120px;" />
+          <div><b>Lot Size (fixed)</b><div style="font-size:11px;color:var(--text-muted);">The size you trade. Risk $ = lots × stop points × $100 (XAUUSD 1 lot = 100 oz)</div></div>
+          <input type="number" id="setLotSize" value="0.10" step="0.01" min="0.01" style="width:120px;" />
         </div>
         <div class="setting-row">
           <div><b>Entry Placement Mode</b><div style="font-size:11px;color:var(--text-muted);">Proximal zone edge or 50% equilibrium</div></div>
@@ -1444,7 +1444,7 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
   };
 
   /* Bumped on every rebuild — check this in the console to prove which build your browser loaded. */
-  const BUILD_STAMP = '2026-10-24 09:05 · v4.44 · a zone made by one violent candle is drawn but never traded, a late zone says so, Momentum entry is on by default, a stop is only hit by the market (levels are re-based with the spot offset) every closed row names the bar that closed it, the lot size is derived from the fixed $ risk and the stop distance, and every timeframe trades in its own slot';
+  const BUILD_STAMP = '2026-10-24 09:40 · v4.45 · a zone made by one violent candle is drawn but never traded, a late zone says so, Momentum entry is on by default, a stop is only hit by the market (levels are re-based with the spot offset) every closed row names the bar that closed it, the lot size is derived from the fixed $ risk and the stop distance, every timeframe trades in its own slot, and the lot size is what you set — the stop decides the dollars';
 
   let chart = null, candleSeries = null, volSeries = null, overlay = null, octx = null;
   let drawQueued = false;
@@ -1466,7 +1466,7 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
   function getCfg() {
     return {
       balance: parseFloat($('setBalance').value) || 10000,
-      riskPct: parseFloat($('setRiskPct').value) || 1.0,
+      lotSize: Math.max(0.01, parseFloat($('setLotSize').value) || 0.10),
       entryMode: $('setEntryMode').value || 'edge',
       slBuf: parseFloat($('setSlBuf').value) || 0.60,
       minRR: parseFloat($('setMinRR').value) || 2.0,
@@ -1791,27 +1791,22 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
       if (isFresh) pts += 1;
       if (zone.hasVol) pts += 1;
       if (zone.sweptLiquidity) pts += 1;
-      /* SIZE VETO (v4.43). Risk is fixed, so the stop distance decides the lots. If the stop is so wide
-         that even the broker minimum (0.01 lots) risks several times the account's risk, the trade
-         cannot be taken as asked — refuse it instead of silently risking 6× the number on screen. */
-      const size = this.positionSize(entry, sl, cfg);
-      const sizeOk = !size.belowMin;
-      if (!sizeOk) passesRR = false;
+      /* v4.45: the lot size is fixed by the user, so the stop only decides the dollars at risk —
+         there is no size to refuse. A wide stop simply risks more, and the Position Tool says how much. */
+      const size = this.positionSize(entry, sl, cfg, rr, rr2);
+      const sizeOk = true;
 
       if (passesRR) pts += 2;
 
       let grade = 'B';
-      if (!sizeOk) grade = 'SKIP (stop too wide to size)';
-      else if (!passesRR) grade = 'SKIP (R:R < 1:' + cfg.minRR + ')';
+      if (!passesRR) grade = 'SKIP (R:R < 1:' + cfg.minRR + ')';
       else if (pts >= 6) grade = 'A+';
       else if (pts >= 4) grade = 'A';
 
-      /* The dollars at risk are what 0.35 lots × 2.79 pts really risks ($97.65), not the $100 budget —
-         so a −1.00R stop is exactly −$97.65 in the journal and every panel says the same number. */
-      const riskUsd = size.actualRiskUsd;
-      const riskBudgetUsd = size.riskUsd;
+      /* Fixed size → these are the real dollars, and −1.00R in the journal is exactly this risk. */
+      const riskUsd = size.riskUsd;
       const lots = size.lots;
-      const rewardUsd = Math.round(riskUsd * rr * 100) / 100;
+      const rewardUsd = size.legs.totalUsd;         // 50% @ 1:2 + 50% @ 1:3
 
       /* last line of defence: the returned plan must be internally ordered */
       const ordered = isBuy ? (sl < entry && entry < tp1 && tp1 <= tp2 + 1e-9)
@@ -1831,7 +1826,7 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
         zoneMedianRange: Number(width.median.toFixed(2)), zoneWidthBound: Number(width.bound.toFixed(2)),
         zoneWidthMultiple: Number(width.multiple.toFixed(1)),
         geomOk, sizeOk,
-        riskUsd, riskBudgetUsd, rewardUsd, lots, size,
+        riskUsd, rewardUsd, lots, size,
         checks: { htfAligned, bothHtfAligned, isFresh, hasVol: zone.hasVol, swept: zone.sweptLiquidity, passesRR }
       };
     },
@@ -1845,30 +1840,38 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
        Risk is larger than a retest entry (hence smaller size), and the targets are R-based
        rather than structural — flagged as `momentum` everywhere it is displayed. */
     /* ---------------- POSITION SIZE ----------------
-       XAUUSD: 1 standard lot = 100 oz, so $1 of price movement = $100 per lot. Risk is the fixed
-       amount the user set (1% of the account); the LOTS are what change with the stop distance:
-           lots = riskUsd / (stop distance in points × $100)
-       A $100 risk therefore buys 0.36 lots on a 2.79-pt stop and 0.05 lots on an 18.4-pt stop. */
+       THE LOT SIZE IS FIXED. That is the user's model and the broker's: you trade 0.10 lots, and the
+       dollars at risk are whatever your stop makes them.
+         XAUUSD: 1 standard lot = 100 oz, so $1.00 of price movement = $100 per lot
+         risk $ = lots × stop (points) × $100
+       0.10 lots with a 40-point stop = $400 at risk; the same size with a 5-point stop = $50.
+       Reward is booked as two legs: 50% at 1:2 and 50% at 1:3 (v4.15), so
+         TP1 $ = 0.5 × lots × (2R) × 100 = 1.0 × risk
+         TP2 $ = 0.5 × lots × (3R) × 100 = 1.5 × risk
+       (Earlier builds inverted this — a fixed $ risk and a lot size derived from the stop. Wrong way
+       round: the size is the constant, the risk is the dependent variable.) */
     CONTRACT_USD_PER_POINT: 100,
     MIN_LOT: 0.01,
-    positionSize(entry, sl, cfg) {
+    positionSize(entry, sl, cfg, rr, rr2) {
       const riskPts = Math.abs((entry || 0) - (sl || 0));
-      const riskUsd = (cfg && cfg.balance ? cfg.balance : 10000) * ((cfg && cfg.riskPct != null ? cfg.riskPct : 1) / 100);
       const perPoint = this.CONTRACT_USD_PER_POINT;
-      const rawLots = riskPts > 0 ? riskUsd / (riskPts * perPoint) : 0;
-      /* ROUND DOWN to the broker's 0.01 step. Rounding to nearest could open 0.13 lots on an 8-pt stop
-         — $104 at risk when the user asked for $100. The fixed risk is a ceiling, so the size is
-         floored: the trade may risk slightly LESS than asked, never more. */
-      const stepped = Math.floor(rawLots * 100 + 1e-9) / 100;
-      const belowMin = rawLots < this.MIN_LOT;          // the fixed risk cannot be expressed at all
-      const lots = Math.max(this.MIN_LOT, stepped);
-      const actualRiskUsd = Math.round(lots * riskPts * perPoint * 100) / 100;
+      const lots = Math.max(this.MIN_LOT, Number((cfg && cfg.lotSize != null ? cfg.lotSize : 0.10)) || 0.10);
+      const partialR = Number(rr || 2), finalR = Number(rr2 || 3);
+      const riskUsd = Math.round(lots * riskPts * perPoint * 100) / 100;
+      const tp1Usd = Math.round(0.5 * lots * riskPts * partialR * perPoint * 100) / 100;
+      const tp2Usd = Math.round(0.5 * lots * riskPts * finalR * perPoint * 100) / 100;
+      const totalUsd = Math.round((tp1Usd + tp2Usd) * 100) / 100;
+      const balance = Number((cfg && cfg.balance) || 0);
+      const pctOfBalance = balance > 0 ? Math.round((riskUsd / balance) * 10000) / 100 : null;
       return {
-        riskPts: Number(riskPts.toFixed(2)), riskUsd, perPoint, rawLots, floors: true,
-        lots, actualRiskUsd, belowMin,
-        underBy: Math.round((riskUsd - actualRiskUsd) * 100) / 100,
-        minRiskUsd: Math.round(this.MIN_LOT * riskPts * perPoint * 100) / 100,
-        formula: `$${riskUsd.toFixed(0)} ÷ (${riskPts.toFixed(2)} pts × $${perPoint}/pt) = ${rawLots.toFixed(3)} lots`
+        lots, riskPts: Number(riskPts.toFixed(2)), perPoint,
+        riskUsd, actualRiskUsd: riskUsd,        // one number: the size is fixed, so there is no rounding gap
+        belowMin: false, minRiskUsd: Math.round(this.MIN_LOT * riskPts * perPoint * 100) / 100,
+        rr: partialR, rr2: finalR,
+        legs: { tp1Usd, tp2Usd, totalUsd },
+        pctOfBalance,
+        /* printed verbatim on the Position Tool */
+        formula: `${lots.toFixed(2)} lots × ${riskPts.toFixed(2)} pts × $${perPoint}/pt = $${riskUsd.toFixed(2)} risk`
       };
     },
 
@@ -1884,15 +1887,14 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
       const PARTIAL_R = 2.0, FINAL_R = 3.0;
       const tp1 = isBuy ? entry + risk * PARTIAL_R : entry - risk * PARTIAL_R;
       const tp2 = isBuy ? entry + risk * FINAL_R : entry - risk * FINAL_R;
-      const size = this.positionSize(entry, sl, cfg);
-      const riskUsd = size.actualRiskUsd;                 // dollars really at risk at this size
-      const riskBudgetUsd = size.riskUsd;
+      const size = this.positionSize(entry, sl, cfg, PARTIAL_R, FINAL_R);
+      const riskUsd = size.riskUsd;                 // lots × stop × $100 — the fixed size, not a budget
       const lots = size.lots;
       return Object.assign({}, s, { size,
         entry, sl, tp1, tp2, risk,
         rr: PARTIAL_R, rr2: FINAL_R, roomR: FINAL_R,
         nearestSrc: 'momentum (R-based)', tp1Src: '1:2 · book 50%', tp2Src: '1:3 · close 50%',
-        passesRR: true, riskUsd, riskBudgetUsd, lots, rewardUsd: Math.round(riskUsd * PARTIAL_R * 100) / 100,
+        passesRR: true, riskUsd, lots, rewardUsd: size.legs.totalUsd,
         momentum: true,
         momentumFrom: s.entry,
         checks: Object.assign({}, s.checks, { passesRR: true })
@@ -2495,7 +2497,6 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
       rr: s.rr,
       rr2: s.rr2 || s.rr,
       riskUsd: s.riskUsd,
-      riskBudgetUsd: s.riskBudgetUsd != null ? s.riskBudgetUsd : s.riskUsd,
       lots: s.lots,
       size: s.size || Quant.positionSize(s.entry, s.sl, getCfg()),
       zoneId: s.zone.id,
@@ -2926,20 +2927,20 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
   }
 
   /* The Exit cell answers "was it really touched?" with the bar that did it, not with a promise. */
-  /* HOW THE LOT SIZE WAS DERIVED — the risk is fixed, the size is what moves with the stop. */
+  /* HOW THE MONEY IS DERIVED — the lot size is fixed; the stop decides the dollars.
+     0.10 lots × 40 pts × $100/pt = $400 risk, then 50% @ 1:2 and 50% @ 1:3 on top of it. */
   function paintSizeWhy(s) {
     const el = $('pLotWhy');
     if (!el) return;
     const cfg = getCfg();
-    const size = (s && s.size) || (s ? Quant.positionSize(s.entry, s.sl, cfg) : null);
+    const size = (s && s.size) || (s ? Quant.positionSize(s.entry, s.sl, cfg, s.rr, s.rr2) : null);
     if (!size) { el.textContent = '—'; return; }
-    el.innerHTML = `${size.formula}`
-      + `<br>budget <b>$${size.riskUsd.toFixed(0)}</b>`
-      + `<span style="color:var(--text-muted);"> (${Number(cfg.riskPct).toFixed(1)}% of $${Number(cfg.balance).toLocaleString()})</span>`
-      + ` · at risk <b style="color:${size.belowMin ? 'var(--sell)' : 'var(--buy)'};">$${size.actualRiskUsd.toFixed(2)}</b>`
-      + (size.belowMin
-          ? `<br><span style="color:var(--sell);">stop too wide for a $${size.riskUsd.toFixed(0)} budget — 0.01 lots is the minimum and it risks $${size.minRiskUsd.toFixed(2)}</span>`
-          : `<span style="color:var(--text-muted);"> (size rounded down to 0.01 lots, so the risk can never exceed the budget)</span>`);
+    const pct = size.pctOfBalance != null
+      ? `<span style="color:var(--text-muted);"> (${size.pctOfBalance.toFixed(1)}% of $${Number(cfg.balance).toLocaleString()})</span>` : '';
+    el.innerHTML = `${size.formula}${pct}`
+      + `<br><br>TP1 50% @ 1:${size.rr.toFixed(0)} <b style="color:var(--buy);">+$${size.legs.tp1Usd.toFixed(2)}</b>`
+      + ` · TP2 50% @ 1:${size.rr2.toFixed(0)} <b style="color:var(--buy);">+$${size.legs.tp2Usd.toFixed(2)}</b>`
+      + ` · total <b style="color:var(--buy);">+$${size.legs.totalUsd.toFixed(2)}</b>`;
   }
 
   function exitCellText(t) {
@@ -2953,14 +2954,16 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
     return `$${Number(t.exitPrice).toFixed(2)} ${leg}${at ? ` · ${at}` : ''}${t.sameBarFill ? ' · fill bar' : ''}`;
   }
 
-  /* proves the journal's $ P/L came from a position sized to the fixed risk */
+  /* proves the journal's $ P/L came from the fixed lot size and this trade's own stop */
   function sizeCellTitle(t) {
     const riskPts = Math.abs(Number(t.entry) - Number(t.sl));
     if (!Number.isFinite(riskPts) || !Number.isFinite(Number(t.lots))) return '';
     const atRisk = Number(t.lots) * riskPts * 100;
-    const budget = Number(t.riskBudgetUsd != null ? t.riskBudgetUsd : t.riskUsd) || 0;
-    return `${Number(t.lots).toFixed(2)} lots × ${riskPts.toFixed(2)} pts × $100/pt = `
-      + `$${atRisk.toFixed(2)} at risk` + (budget ? ` (budget $${budget.toFixed(0)})` : '');
+    const r2 = Number(t.rr2 || t.rr || 3), r1 = Number(t.rr || 2);
+    const tp1Usd = 0.5 * Number(t.lots) * riskPts * r1 * 100;
+    const tp2Usd = 0.5 * Number(t.lots) * riskPts * r2 * 100;
+    return `${Number(t.lots).toFixed(2)} lots × ${riskPts.toFixed(2)} pts × $100/pt = $${atRisk.toFixed(2)} at risk`
+      + ` · 50% @ 1:${r1.toFixed(0)} +$${tp1Usd.toFixed(2)} · 50% @ 1:${r2.toFixed(0)} +$${tp2Usd.toFixed(2)}`;
   }
 
   function exitCellTitle(t) {
@@ -3763,7 +3766,7 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
       // the block becomes unreadable — the secondary map keeps its fills, lines and zone label.
       if (!isPrimary) return;
       const cfg = getCfg();
-      const riskUsd = cfg.balance * (cfg.riskPct / 100);
+      const riskUsd = Quant.positionSize(m.entry, m.sl, cfg).riskUsd;   // fixed lots × this stop
       const rrTxt = m.planRR ? `R:R 1:${m.planRR.toFixed(2)}` : `1R = $${Math.round(riskUsd)}`;
       badges.push({ text: `Target 1:2 · $${m.tpMin.toFixed(2)} · +$${Math.round(riskUsd * 2)}`, y: yMin, bg: RR_TV.blue, fg: RR_TV.white, x: x1 + 5 });
       badges.push({ text: `Entry $${m.entry.toFixed(2)} · ${rrTxt}`, y: yEntry, bg: RR_TV.blue, fg: RR_TV.white, x: x1 + 5 });
@@ -4113,8 +4116,7 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
       const setupTF = (s.zone && s.zone.tf ? s.zone.tf : state.activeTF).toUpperCase();
       const act = setupActionability(s, p);
       if (!s.passesRR) {
-        sigPill.textContent = s.sizeOk === false ? `${setupTF} ${s.dir} UNSIZEABLE`
-          : s.zoneTooWide ? `${setupTF} ${s.dir} TOO WIDE` : `${setupTF} ${s.dir} SKIP`;
+        sigPill.textContent = s.zoneTooWide ? `${setupTF} ${s.dir} TOO WIDE` : `${setupTF} ${s.dir} SKIP`;
         sigPill.title = s.zoneTooWide
           ? `this zone is ${s.zoneHeight.toFixed(2)} points tall — ${s.zoneWidthMultiple.toFixed(1)}× a normal candle`
           : `${setupTF} setup fails the R:R filter`;
@@ -4224,9 +4226,10 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
         $('pRR').textContent = `1 : ${s.rr.toFixed(2)}`;
         $('pLots').textContent = `${num(s.lots)} Lots`;
         paintSizeWhy(s);
-        const rewardShown = s.rewardUsd != null ? s.rewardUsd
-          : (Number(s.lots || 0) * Math.abs(Number(s.entry) - Number(s.sl)) * 100 * Number(s.rr || 2));
-        $('pUsd').textContent = `-$${num(s.riskUsd, 0)} / +$${num(rewardShown, 0)}`;
+        const riskPts = Math.abs(Number(s.entry) - Number(s.sl));
+        const sz = s.size || Quant.positionSize(s.entry, s.sl, getCfg(), s.rr, s.rr2);
+        const rewardShown = s.rewardUsd != null ? s.rewardUsd : sz.legs.totalUsd;
+        $('pUsd').textContent = `-$${num(sz.riskUsd, 0)} / +$${num(rewardShown, 0)}`;
       }
 
       $('gcBias').textContent = s.checks.bothHtfAligned ? '✓ 4H+1H Match' : s.checks.htfAligned ? '✓ Partial' : '✕ Counter';
@@ -4271,9 +4274,7 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
            read "R:R 2.00 is below the 1:2 minimum" — a sentence that contradicts itself. */
         const beyond = Number.isFinite(s.nextRoomR) && s.nextSrc
           ? ` · next structure ${s.nextRoomR.toFixed(2)}R to ${s.nextSrc}` : '';
-        $('fcRR').textContent = s.sizeOk === false
-          ? `Stop ${s.risk.toFixed(2)} pts — at 0.01 lots that risks $${s.size.minRiskUsd.toFixed(0)}, not $${s.size.riskUsd.toFixed(0)}`
-          : s.zoneTooWide
+        $('fcRR').textContent = s.zoneTooWide
           ? `Zone ${s.zoneHeight.toFixed(2)} pts = ${s.zoneWidthMultiple.toFixed(1)}× a normal candle (limit ${s.zoneWidthBound.toFixed(2)})`
           : `Room ${s.roomR >= 50 ? 'open air' : s.roomR.toFixed(2) + 'R'} < ${vetoLabel} to ${s.nearestSrc}`
           + (s.nearestPrice ? ` $${s.nearestPrice.toFixed(2)}` : '') + beyond;
@@ -4284,12 +4285,7 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
           : `Entry ${s.entry.toFixed(2)}   SL ${s.sl.toFixed(2)}   TP1 ${s.tp1.toFixed(2)}`;
         /* The nearest structure is where TP would SIT, so name it as the target. The old wording
            ("room to the swing low") read like a bullish argument for a SELL. */
-        $('fcReason').textContent = s.sizeOk === false
-          ? `${s.dir} ${s.zone.tf.toUpperCase()} ${s.zone.type} not taken — the stop is ${s.risk.toFixed(2)} points, `
-            + `so a $${s.size.riskUsd.toFixed(0)} risk needs ${s.size.rawLots.toFixed(3)} lots. The smallest size `
-            + `available is ${s.size.MIN_LOT || 0.01} lots, which would risk $${s.size.minRiskUsd.toFixed(0)} — `
-            + `${(s.size.minRiskUsd / Math.max(1, s.size.riskUsd)).toFixed(1)}× the risk you set. Narrow the stop or raise Risk Per Trade.`
-          : s.zoneTooWide
+        $('fcReason').textContent = s.zoneTooWide
           ? `${s.dir} ${s.zone.tf.toUpperCase()} ${s.zone.type} not taken — this zone is ${s.zoneHeight.toFixed(2)} `
             + `points tall, ${s.zoneWidthMultiple.toFixed(1)}× a normal ${String(s.zone.tf).toUpperCase()} candle `
             + `(${s.zoneMedianRange.toFixed(2)} pts). A stop beyond it would risk ${s.risk.toFixed(2)} points; `
@@ -4676,7 +4672,7 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
     $('btnDemandRR').addEventListener('click', () => toggleRR('demand'));
     $('btnSupplyRR').addEventListener('click', () => toggleRR('supply'));
 
-    ['setBalance', 'setRiskPct', 'setEntryMode', 'setSlBuf', 'setMinRR', 'setExtraOffset', 'setMomentum', 'setTargetModel', 'setVetoR'].forEach(id => {
+    ['setBalance', 'setLotSize', 'setEntryMode', 'setSlBuf', 'setMinRR', 'setExtraOffset', 'setMomentum', 'setTargetModel', 'setVetoR'].forEach(id => {
       $(id).addEventListener('change', () => {
         rebaseLiveTrades();    // changing the offset moves the whole price space, levels included
         runFullAnalysis();     // apply the new config to the current candles right away
@@ -4755,7 +4751,7 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
     const ok = await syncAllData();
     if (ok) {
       connectWS();
-      log('SMC Gold Terminal v4.44 online — build ' + BUILD_STAMP + '. Structural Swing High/Low TP & 1:2 R:R Filter active. Footer R:R dots armed.', '#10b981');
+      log('SMC Gold Terminal v4.45 online — build ' + BUILD_STAMP + '. Structural Swing High/Low TP & 1:2 R:R Filter active. Footer R:R dots armed.', '#10b981');
     }
     setInterval(calibrateSpot, 60000);
   }
