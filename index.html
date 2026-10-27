@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>SMC Gold Terminal v4.45 — SMC / XAUUSD Terminal</title>
+<title>SMC Gold Terminal v4.46 — SMC / XAUUSD Terminal</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700;800&display=swap" rel="stylesheet">
@@ -342,7 +342,7 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
   <div class="brand">
     <div class="brand-logo">SMC</div>
     <div>
-      <div class="brand-title">SMC Gold Terminal <span class="pill pill-neutral" id="buildBadge">v4.45 FIXED LOT</span></div>
+      <div class="brand-title">SMC Gold Terminal <span class="pill pill-neutral" id="buildBadge">v4.46 RESTORE SAFE</span></div>
       <div class="brand-sub">Swing Liquidity Targets • 1:2 R:R Filter • Auto Trade Lifecycle &amp; Screenshot Journal</div>
     </div>
   </div>
@@ -1444,7 +1444,7 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
   };
 
   /* Bumped on every rebuild — check this in the console to prove which build your browser loaded. */
-  const BUILD_STAMP = '2026-10-24 09:40 · v4.45 · a zone made by one violent candle is drawn but never traded, a late zone says so, Momentum entry is on by default, a stop is only hit by the market (levels are re-based with the spot offset) every closed row names the bar that closed it, the lot size is derived from the fixed $ risk and the stop distance, every timeframe trades in its own slot, and the lot size is what you set — the stop decides the dollars';
+  const BUILD_STAMP = '2026-10-24 10:05 · v4.46 · a zone made by one violent candle is drawn but never traded, a late zone says so, Momentum entry is on by default, a stop is only hit by the market (levels are re-based with the spot offset) every closed row names the bar that closed it, the lot size is derived from the fixed $ risk and the stop distance, every timeframe trades in its own slot, the lot size is what you set — the stop decides the dollars, and a trade restored from an older build cannot freeze the scan';
 
   let chart = null, candleSeries = null, volSeries = null, overlay = null, octx = null;
   let drawQueued = false;
@@ -2508,6 +2508,7 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
       realizedR: 0,
       legs: [],
       why: setupWhy(s, sess.short),
+      checks: s.checks || null,          // what this trade was actually armed on (v4.46)
       createdAt: Date.now(),
       openedAt: null,
       closedAt: null
@@ -2729,6 +2730,17 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
       if (expired.length) { state.skipped = state.skipped.slice(0, 40); persistSkipped(); }
       const list = all.filter(tr => tr.status === 'ACTIVE' || Date.now() - (tr.createdAt || 0) < pendingTtl(tr.tf));
       if (!list.length) { localStorage.removeItem(ACTIVE_KEY); return; }
+      /* Upgrade what the old build wrote. The LOTS are history (that is the position that was opened)
+         and are kept, but the money breakdown is re-derived from them so no panel can quote a shape
+         that no longer exists. */
+      list.forEach(tr => {
+        try {
+          const sz = sizeForTrade(tr, getCfg());
+          tr.size = sz;
+          tr.riskUsd = sz.riskUsd;
+          tr.rr = sz.rr; tr.rr2 = sz.rr2;
+        } catch (e) {}
+      });
       state.liveTrades = list;
       syncPrimaryTrade();
       list.forEach(tr => log(`[RESTORE] ${tr.tf.toUpperCase()} ${tr.dir} ${tr.status} @ $${tr.entry.toFixed(2)} recovered after reload — still tracking.`, '#60a5fa'));
@@ -2927,13 +2939,30 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
   }
 
   /* The Exit cell answers "was it really touched?" with the bar that did it, not with a promise. */
+  /* A SIZE OBJECT THAT CANNOT LIE OR THROW.
+     A trade restored from storage may have been armed by an older build, whose `size` object has no
+     `legs`/`rr` fields. Reading `.legs.tp1Usd` off it threw a TypeError, which aborted the dashboard
+     render half-way — the tracker stayed on "NO ACTIVE TRADE", the zone list stayed on "Scanning live
+     structure…" and, because the throw happened inside the update path, no new setup could be
+     evaluated or armed until the page was reloaded. Size is now always re-derived from the trade's
+     OWN entry/stop/lots, which is the only thing the panel is allowed to quote anyway. */
+  function sizeForTrade(t, cfg) {
+    if (!t) return null;
+    const base = cfg || getCfg();
+    const rr = Number(t.rr || 2), rr2 = Number(t.rr2 || t.rr || 3);
+    const lots = Number(t.lots);
+    const cfg2 = Object.assign({}, base, { lotSize: Number.isFinite(lots) && lots > 0 ? lots : base.lotSize });
+    return Quant.positionSize(t.entry, t.sl, cfg2, rr, rr2);
+  }
+
   /* HOW THE MONEY IS DERIVED — the lot size is fixed; the stop decides the dollars.
      0.10 lots × 40 pts × $100/pt = $400 risk, then 50% @ 1:2 and 50% @ 1:3 on top of it. */
   function paintSizeWhy(s) {
     const el = $('pLotWhy');
     if (!el) return;
     const cfg = getCfg();
-    const size = (s && s.size) || (s ? Quant.positionSize(s.entry, s.sl, cfg, s.rr, s.rr2) : null);
+    const size = (s && s.size && Array.isArray(s.size.legs) === false && s.size.legs && s.size.rr != null)
+      ? s.size : sizeForTrade(s, cfg);
     if (!size) { el.textContent = '—'; return; }
     const pct = size.pctOfBalance != null
       ? `<span style="color:var(--text-muted);"> (${size.pctOfBalance.toFixed(1)}% of $${Number(cfg.balance).toLocaleString()})</span>` : '';
@@ -4067,7 +4096,17 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
 
     $('gcBias').textContent = tr.dir === 'BUY' ? '✓ Long' : '✓ Short';
     $('gcFresh').textContent = booked ? '✓ 50% booked' : (filled ? '✓ Filled' : '— Pending');
-    $('gcVol').textContent = '—'; $('gcSweep').textContent = '—';
+    /* The trade's own confluence, as recorded when it was armed. Rows opened by an older build did
+       not store `checks`, so they say so instead of printing a dash with no explanation. */
+    if (tr.checks) {
+      $('gcVol').textContent = tr.checks.hasVol ? '✓ Vol > SMA20' : '— Standard';
+      $('gcSweep').textContent = tr.checks.swept ? '✓ Swept Swing' : '— Internal';
+      $('gcVol').title = ''; $('gcSweep').title = '';
+    } else {
+      $('gcVol').textContent = '—'; $('gcSweep').textContent = '—';
+      $('gcVol').title = 'this trade was opened by a build that did not store its confluence checks';
+      $('gcSweep').title = $('gcVol').title;
+    }
     $('gcRR').textContent = tr.fixedR
       ? `✓ fixed 1:${Number(tr.rr).toFixed(0)}→1:${rr2.toFixed(0)}`
       : `✓ 1:${Number(tr.rr).toFixed(2)} → 1:${rr2.toFixed(2)}`;
@@ -4110,7 +4149,10 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
     const openTr = state.liveTrades.find(t => t.tf === state.activeTF) || null;
 
     if (openTr) {
-      renderOpenTradeCards(openTr, cfg);
+      /* A render error in here used to stop the whole dashboard update — which is also the path that
+         evaluates and arms setups. It can no longer take trading down with it. */
+      try { renderOpenTradeCards(openTr, cfg); }
+      catch (e) { log(`[RENDER] open-trade cards failed: ${e.message} — the scan keeps running.`, '#ef4444'); }
     } else if (s) {
       const sigPill = $('stSignalPill'), grPill = $('stGradePill'), rrPill = $('stRRFilterPill');
       const setupTF = (s.zone && s.zone.tf ? s.zone.tf : state.activeTF).toUpperCase();
@@ -4227,7 +4269,7 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
         $('pLots').textContent = `${num(s.lots)} Lots`;
         paintSizeWhy(s);
         const riskPts = Math.abs(Number(s.entry) - Number(s.sl));
-        const sz = s.size || Quant.positionSize(s.entry, s.sl, getCfg(), s.rr, s.rr2);
+        const sz = (s.size && s.size.legs && s.size.rr != null) ? s.size : sizeForTrade(s, getCfg());
         const rewardShown = s.rewardUsd != null ? s.rewardUsd : sz.legs.totalUsd;
         $('pUsd').textContent = `-$${num(sz.riskUsd, 0)} / +$${num(rewardShown, 0)}`;
       }
@@ -4751,7 +4793,7 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
     const ok = await syncAllData();
     if (ok) {
       connectWS();
-      log('SMC Gold Terminal v4.45 online — build ' + BUILD_STAMP + '. Structural Swing High/Low TP & 1:2 R:R Filter active. Footer R:R dots armed.', '#10b981');
+      log('SMC Gold Terminal v4.46 online — build ' + BUILD_STAMP + '. Structural Swing High/Low TP & 1:2 R:R Filter active. Footer R:R dots armed.', '#10b981');
     }
     setInterval(calibrateSpot, 60000);
   }
