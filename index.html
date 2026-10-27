@@ -238,6 +238,8 @@ canvas { max-width: 100%; }
 .kv-box { background: var(--bg); border: 1px solid var(--border-subtle); border-radius: 6px; padding: 6px 8px; }
 .kv-box .k { font-size: 9.5px; color: var(--text-muted); text-transform: uppercase; }
 .kv-box .v { font-size: 12.5px; font-weight: 700; font-family: var(--font-mono); margin-top: 2px; }
+.size-why { font-size: 10px; line-height: 1.5; color: var(--text-muted); background: var(--bg); border: 1px dashed var(--border-subtle); border-left: 2px solid var(--accent); border-radius: 5px; padding: 5px 8px; margin-top: 6px; }
+.size-why b { color: var(--text-secondary); font-family: var(--font-mono); }
 
 .grade-breakdown {
   background: var(--bg); border: 1px solid var(--border-subtle); border-radius: 6px;
@@ -340,7 +342,7 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
   <div class="brand">
     <div class="brand-logo">SMC</div>
     <div>
-      <div class="brand-title">SMC Gold Terminal <span class="pill pill-neutral" id="buildBadge">v4.34 FILL FOR REAL</span></div>
+      <div class="brand-title">SMC Gold Terminal <span class="pill pill-neutral" id="buildBadge">v4.44 MULTI-TF SLOTS</span></div>
       <div class="brand-sub">Swing Liquidity Targets • 1:2 R:R Filter • Auto Trade Lifecycle &amp; Screenshot Journal</div>
     </div>
   </div>
@@ -496,9 +498,11 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
             <div class="kv-box"><div class="k">TP1 · 50% (1:2)</div><div class="v" id="pTP1" style="color:var(--buy);">—</div></div>
             <div class="kv-box"><div class="k">TP2 · 50% (1:3)</div><div class="v" id="pTP2" style="color:var(--buy);">—</div></div>
             <div class="kv-box"><div class="k">Structural R:R</div><div class="v" id="pRR">—</div></div>
-            <div class="kv-box"><div class="k">Lot Size (1% Risk)</div><div class="v" id="pLots">—</div></div>
+            <div class="kv-box"><div class="k">Lot Size (fixed $ risk)</div><div class="v" id="pLots">—</div></div>
             <div class="kv-box"><div class="k">Risk $ / Reward $</div><div class="v" id="pUsd">—</div></div>
           </div>
+
+          <div id="pLotWhy" class="size-why">—</div>
 
           <div class="grade-breakdown" id="gradeChecklist">
             <div class="grade-item"><span>1. HTF Bias Alignment (4H/1H)</span><span class="mono" id="gcBias">—</span></div>
@@ -580,7 +584,9 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
             <th>Dir / Grade</th>
             <th>Entry</th>
             <th>SL</th>
+            <th>Size</th>
             <th>TP1 · 50%</th>
+            <th>Exit</th>
             <th>R:R</th>
             <th>Why This Trade</th>
             <th>Result</th>
@@ -659,10 +665,34 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
           </select>
         </div>
         <div class="setting-row">
-          <div><b>Momentum Entry</b><div style="font-size:11px;color:var(--text-muted);">Zone confirmed but no retest? Enter at the confirmation price, stop beyond the far edge</div></div>
-          <select id="setMomentum" style="width:140px;">
+          <div><b>Momentum Entry</b><div style="font-size:11px;color:var(--text-muted);">Zone confirmed but price never came back?
+            Enter at the confirmation price with the stop beyond the far edge of the zone. <b>Default: On</b> —
+            measured over 24h of 5M bars it turned 3 never-filled setups into trades and cost nothing net.</div></div>
+          <select id="setMomentum" style="width:170px;">
+            <option value="on" selected>On — take the break (default)</option>
             <option value="off">Off — retest only</option>
-            <option value="on">On — take the break</option>
+          </select>
+        </div>
+        <div class="setting-row">
+          <div><b>Structure Veto (R)</b>
+            <div style="font-size:11px;color:var(--text-muted);">How close the nearest swing or opposing
+            zone may sit before the trade is refused. 2.0R = the old veto (a target through structure is
+            refused). Lower it to take those trades and let the targets come from R instead of structure.</div></div>
+          <select id="setVetoR" style="width:180px;">
+            <option value="2">2.0R — refuse (strict)</option>
+            <option value="1.5">1.5R</option>
+            <option value="1">1.0R</option>
+            <option value="0.5" selected>0.5R — take most, wall is a warning</option>
+            <option value="0">Off — never veto</option>
+          </select>
+        </div>
+        <div class="setting-row">
+          <div><b>Target Model</b>
+            <div style="font-size:11px;color:var(--text-muted);">What sets TP1/TP2. Structure veto = refuse when the nearest
+            swing/zone is closer than 2R (default). Fixed R = always 1:2 and 1:3, ignoring internal structure.</div></div>
+          <select id="setTargetModel" style="width:180px;">
+            <option value="structure">Structure veto (default)</option>
+            <option value="fixedR">Fixed R — 1:2 and 1:3</option>
           </select>
         </div>
         <div class="setting-row">
@@ -1399,6 +1429,7 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
     audioCtx: null,
     currentSetup: null,    // Best valid setup on active TF
     skipped: [],           // setups that expired unfilled — visible, never counted as trades
+    lastArmAtByTf: {},     // one cooldown per timeframe so a 15M arm cannot mute the 5M slot
     liveTrades: [],        // Every tracked setup: PENDING -> ACTIVE -> closed. One per timeframe.
     activeTrade: null,     // Mirror of the primary live trade (first ACTIVE, else first PENDING)
     journal: [],           // Closed trades (metadata only — charts live in IndexedDB)
@@ -1413,7 +1444,7 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
   };
 
   /* Bumped on every rebuild — check this in the console to prove which build your browser loaded. */
-  const BUILD_STAMP = '2026-10-23 23:05 · v4.34 · a pending order only exists at the zone, and a two-leg plan must have room for both legs';
+  const BUILD_STAMP = '2026-10-24 09:05 · v4.44 · a zone made by one violent candle is drawn but never traded, a late zone says so, Momentum entry is on by default, a stop is only hit by the market (levels are re-based with the spot offset) every closed row names the bar that closed it, the lot size is derived from the fixed $ risk and the stop distance, and every timeframe trades in its own slot';
 
   let chart = null, candleSeries = null, volSeries = null, overlay = null, octx = null;
   let drawQueued = false;
@@ -1441,7 +1472,18 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
       minRR: parseFloat($('setMinRR').value) || 2.0,
       extraOffset: parseFloat($('setExtraOffset').value) || 0,
       // Momentum entry is OPT-IN. Off = the original behaviour: wait for price to retest the zone.
-      momentum: ($('setMomentum') && $('setMomentum').value) === 'on'
+      momentum: ($('setMomentum') && $('setMomentum').value) === 'on',
+      /* TARGET MODEL (v4.37). 'structure' = the original rule: the nearest swing or opposing zone
+         vetoes the trade when it is closer than the fixed 1:2 partial. 'fixedR' = place TP1 at 1:2 and
+         TP2 at 1:3 regardless of internal structure, and show the near structure as a warning.
+         Measured on the real 5M series: a sell refused for "1.30R of room to a 5M demand" still ran
+         2R past that demand — the veto threw away a valid trade. */
+      targetModel: ($('setTargetModel') && $('setTargetModel').value) || 'structure',
+      /* STRUCTURE VETO DISTANCE (v4.41). How close structure has to be before it refuses the trade.
+         2 = the original rule (refuse when the wall is inside the fixed 1:2 partial). Lower values
+         take those trades with R-based targets and report the wall as a warning. Measured in
+         qa/tests/modelab.js; see CHANGES §BD. */
+      vetoR: (() => { const v = parseFloat($('setVetoR') && $('setVetoR').value); return Number.isFinite(v) ? v : 2; })()
     };
   }
 
@@ -1611,6 +1653,27 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
     },
 
     /* Builds a complete Setup from a Zone using Structural Swing High/Low Targets & 1:2 R:R Filter */
+    /* Typical candle range for a timeframe, from its own recent history. Used to tell a normal zone
+       from one created by a single violent bar. */
+    medianRange(tf, n = 120) {
+      const arr = (state.candles[tf] || []).slice(-n);
+      if (!arr.length) return 1;
+      const r = arr.map(c => Math.abs(c.high - c.low)).sort((a, b) => a - b);
+      return Math.max(0.01, r[Math.floor(r.length / 2)]);
+    },
+
+    /* A zone is only tradeable if a stop beyond it is a sane distance. A 90-point stop on a 5M chart
+       (median candle 3 points) is not a plan, it is a number.
+         bound = max(4 x median range of that timeframe, 0.15% of price)
+       Big candles still make zones — they are drawn as asked — they just do not become trades. */
+    zoneWidthCheck(zone, price) {
+      const tf = (zone && zone.tf) || '5m';
+      const h = Math.abs((zone.top || 0) - (zone.bottom || 0));
+      const med = this.medianRange(tf);
+      const bound = Math.max(4 * med, (price || 4000) * 0.0015);
+      return { height: h, median: med, bound, tooWide: h > bound, multiple: med > 0 ? h / med : 0 };
+    },
+
     buildSwingSetup(zone, allZones, swings, bias4h, bias1h, cfg) {
       if (!zone || zone.broken) return null;
       const isBuy = zone.type === 'demand';
@@ -1619,6 +1682,13 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
       const sl = isBuy ? (zone.bottom - cfg.slBuf) : (zone.top + cfg.slBuf);
       const risk = Math.abs(entry - sl);
       if (risk <= 0.05) return null;
+
+      /* HARD INVARIANTS. Whatever the zone looks like, a BUY must have stop < entry < targets and a
+         SELL must have targets < entry < stop. A plan that breaks this can never be right, so it is
+         refused here rather than published and explained later. */
+      const width = this.zoneWidthCheck(zone, entry);
+      const geomOk = isBuy ? (sl < entry) : (sl > entry);
+      if (!geomOk) return null;
 
       // Collect candidate structural targets (Previous Swing Highs/Lows + Opposing Unmitigated Zones)
       const candidates = [];
@@ -1658,11 +1728,28 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
       const nearestPrice = uniqueTargets.length ? uniqueTargets[0].price : null;
 
       const tp1 = isBuy ? entry + risk * PARTIAL_R : entry - risk * PARTIAL_R;
+      /* FIXED-R MODE: the targets are the rule, structure is only a warning. The trade keeps its
+         fixed 1:2 partial and 1:3 runner even when a swing or zone sits closer than 2R. */
+      const fixedR = cfg.targetModel === 'fixedR';
+      /* The veto threshold (Settings → Structure Veto). 2.0 reproduces the original behaviour exactly:
+         a two-leg plan needs the wall at or beyond the 1:2 partial plus a sliver of runner. */
+      const vetoR = Number.isFinite(cfg.vetoR) ? cfg.vetoR : 2;
       /* Capped by real structure and never placed BEYOND it. The old floor (PARTIAL_R + 0.25, then
          + 0.05) let the runner overrun the wall. It is now clamped to the room itself, which for any
          setup that actually passes the filter (room >= 2R) is always >= TP1, so the legs stay
          ordered and TP2 never sits past structure. */
-      const finalRUsed = Math.min(FINAL_R, Math.max(PARTIAL_R, nearestRoomR));
+      /* Does the veto admit this trade at all? (Needed before the targets: a REFUSED setup must keep
+         its runner clamped to the room — printing a 1:3 target on a plan the engine will not take was
+         how "reward" used to leak onto a skipped setup.) */
+      const MIN_RUNNER_R0 = 0.10;
+      const vetoNeed0 = vetoR >= PARTIAL_R ? Math.max(vetoR, PARTIAL_R + MIN_RUNNER_R0) : vetoR;
+      const admitted = fixedR ? true : (vetoR <= 0 ? true : nearestRoomR >= vetoNeed0);
+      /* Structure sets the runner only when there IS room for a structural runner. If the veto is set
+         low enough to ADMIT a wall inside the 1:2 partial, the targets have to come from R — clamping
+         the runner onto a 0.86R wall produced two legs at the same price, i.e. a plan that isn't one. */
+      const structuralRoom = nearestRoomR >= PARTIAL_R + 0.10;
+      const targetsRBased = fixedR || (!structuralRoom && admitted);
+      const finalRUsed = targetsRBased ? FINAL_R : Math.min(FINAL_R, Math.max(PARTIAL_R, nearestRoomR));
       const tp2 = isBuy ? entry + risk * finalRUsed : entry - risk * finalRUsed;
 
       const rr = PARTIAL_R;
@@ -1675,9 +1762,20 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
          "TP1 4017.76 / TP2 4017.76" — two legs at the same price, i.e. a runner that does not exist.
          A real two-leg plan needs a sliver of room beyond the partial. */
       const MIN_RUNNER_R = 0.10;
-      const passesRR = nearestRoomR >= cfg.minRR && nearestRoomR >= PARTIAL_R + MIN_RUNNER_R;
-      const roomShortOfPartial = nearestRoomR < PARTIAL_R;
-      const roomShortOfRunner = !roomShortOfPartial && nearestRoomR < PARTIAL_R + MIN_RUNNER_R;
+      /* In fixed-R mode the near structure no longer vetoes the trade; it only has to be a real
+         zone (risk already > 0.05). The card still reports the structure and its distance. */
+      const vetoNeed = vetoR >= PARTIAL_R ? Math.max(vetoR, PARTIAL_R + MIN_RUNNER_R) : vetoR;
+      const roomOk = fixedR
+        ? true
+        : (vetoR <= 0 ? true : nearestRoomR >= vetoNeed);
+      /* …but a stop wider than the market's own volatility is never tradeable, in either mode. */
+      let passesRR = roomOk && !width.tooWide;      // may be revoked below by the size veto
+      const roomShortOfPartial = !fixedR && nearestRoomR < PARTIAL_R;
+      const roomShortOfRunner = !fixedR && !roomShortOfPartial && nearestRoomR < PARTIAL_R + MIN_RUNNER_R;
+      const structureInsideTargets = targetsRBased && nearestRoomR < FINAL_R;   // warning flag
+      /* set when the trade is only allowed because the user lowered the veto: the wall is inside the
+         plan and the targets are R-based rather than structural */
+      const againstStructure = !fixedR && !structuralRoom && roomOk;
       const tp1Obj = { price: tp1, src: '1:2 · book 50%' };
       const tp2Obj = { price: tp2, src: `${nearestSrc} · close 50% (1:${finalRUsed.toFixed(2)})` };
 
@@ -1693,22 +1791,47 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
       if (isFresh) pts += 1;
       if (zone.hasVol) pts += 1;
       if (zone.sweptLiquidity) pts += 1;
+      /* SIZE VETO (v4.43). Risk is fixed, so the stop distance decides the lots. If the stop is so wide
+         that even the broker minimum (0.01 lots) risks several times the account's risk, the trade
+         cannot be taken as asked — refuse it instead of silently risking 6× the number on screen. */
+      const size = this.positionSize(entry, sl, cfg);
+      const sizeOk = !size.belowMin;
+      if (!sizeOk) passesRR = false;
+
       if (passesRR) pts += 2;
 
       let grade = 'B';
-      if (!passesRR) grade = 'SKIP (R:R < 1:' + cfg.minRR + ')';
+      if (!sizeOk) grade = 'SKIP (stop too wide to size)';
+      else if (!passesRR) grade = 'SKIP (R:R < 1:' + cfg.minRR + ')';
       else if (pts >= 6) grade = 'A+';
       else if (pts >= 4) grade = 'A';
 
-      const riskUsd = cfg.balance * (cfg.riskPct / 100);
-      const lots = riskUsd / (risk * 100);
-      const rewardUsd = riskUsd * rr;
+      /* The dollars at risk are what 0.35 lots × 2.79 pts really risks ($97.65), not the $100 budget —
+         so a −1.00R stop is exactly −$97.65 in the journal and every panel says the same number. */
+      const riskUsd = size.actualRiskUsd;
+      const riskBudgetUsd = size.riskUsd;
+      const lots = size.lots;
+      const rewardUsd = Math.round(riskUsd * rr * 100) / 100;
+
+      /* last line of defence: the returned plan must be internally ordered */
+      const ordered = isBuy ? (sl < entry && entry < tp1 && tp1 <= tp2 + 1e-9)
+                            : (tp2 <= tp1 + 1e-9 && tp1 < entry && entry < sl);
+      if (!ordered) {
+        log(`[REFUSED] ${dir} on ${String(zone.tf).toUpperCase()} ${zone.type} produced an unordered plan `
+          + `(entry ${entry.toFixed(2)} sl ${sl.toFixed(2)} tp1 ${tp1.toFixed(2)} tp2 ${tp2.toFixed(2)}) — not published.`, '#ef4444');
+        return null;
+      }
 
       return {
         id: zone.id, zone, dir, grade, entry, sl, tp1, tp2,
         tp1Src: tp1Obj.src, tp2Src: tp2Obj.src,
         risk, rr, rr2, roomR, nearestSrc, nearestPrice, nextRoomR, nextSrc, passesRR, roomShortOfPartial, roomShortOfRunner,
-        riskUsd, rewardUsd, lots,
+        fixedR, structureInsideTargets, targetsRBased, againstStructure, vetoR,
+        zoneTooWide: width.tooWide, zoneHeight: Number(width.height.toFixed(2)),
+        zoneMedianRange: Number(width.median.toFixed(2)), zoneWidthBound: Number(width.bound.toFixed(2)),
+        zoneWidthMultiple: Number(width.multiple.toFixed(1)),
+        geomOk, sizeOk,
+        riskUsd, riskBudgetUsd, rewardUsd, lots, size,
         checks: { htfAligned, bothHtfAligned, isFresh, hasVol: zone.hasVol, swept: zone.sweptLiquidity, passesRR }
       };
     },
@@ -1721,6 +1844,34 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
          TP1 = 1:2 of that wider risk, TP2 = 1:3.
        Risk is larger than a retest entry (hence smaller size), and the targets are R-based
        rather than structural — flagged as `momentum` everywhere it is displayed. */
+    /* ---------------- POSITION SIZE ----------------
+       XAUUSD: 1 standard lot = 100 oz, so $1 of price movement = $100 per lot. Risk is the fixed
+       amount the user set (1% of the account); the LOTS are what change with the stop distance:
+           lots = riskUsd / (stop distance in points × $100)
+       A $100 risk therefore buys 0.36 lots on a 2.79-pt stop and 0.05 lots on an 18.4-pt stop. */
+    CONTRACT_USD_PER_POINT: 100,
+    MIN_LOT: 0.01,
+    positionSize(entry, sl, cfg) {
+      const riskPts = Math.abs((entry || 0) - (sl || 0));
+      const riskUsd = (cfg && cfg.balance ? cfg.balance : 10000) * ((cfg && cfg.riskPct != null ? cfg.riskPct : 1) / 100);
+      const perPoint = this.CONTRACT_USD_PER_POINT;
+      const rawLots = riskPts > 0 ? riskUsd / (riskPts * perPoint) : 0;
+      /* ROUND DOWN to the broker's 0.01 step. Rounding to nearest could open 0.13 lots on an 8-pt stop
+         — $104 at risk when the user asked for $100. The fixed risk is a ceiling, so the size is
+         floored: the trade may risk slightly LESS than asked, never more. */
+      const stepped = Math.floor(rawLots * 100 + 1e-9) / 100;
+      const belowMin = rawLots < this.MIN_LOT;          // the fixed risk cannot be expressed at all
+      const lots = Math.max(this.MIN_LOT, stepped);
+      const actualRiskUsd = Math.round(lots * riskPts * perPoint * 100) / 100;
+      return {
+        riskPts: Number(riskPts.toFixed(2)), riskUsd, perPoint, rawLots, floors: true,
+        lots, actualRiskUsd, belowMin,
+        underBy: Math.round((riskUsd - actualRiskUsd) * 100) / 100,
+        minRiskUsd: Math.round(this.MIN_LOT * riskPts * perPoint * 100) / 100,
+        formula: `$${riskUsd.toFixed(0)} ÷ (${riskPts.toFixed(2)} pts × $${perPoint}/pt) = ${rawLots.toFixed(3)} lots`
+      };
+    },
+
     momentumSetup(s, price, cfg) {
       if (!s || !s.zone || price == null) return null;
       const isBuy = s.dir === 'BUY';
@@ -1733,13 +1884,15 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
       const PARTIAL_R = 2.0, FINAL_R = 3.0;
       const tp1 = isBuy ? entry + risk * PARTIAL_R : entry - risk * PARTIAL_R;
       const tp2 = isBuy ? entry + risk * FINAL_R : entry - risk * FINAL_R;
-      const riskUsd = cfg.balance * (cfg.riskPct / 100);
-      const lots = riskUsd / (risk * 100);
-      return Object.assign({}, s, {
+      const size = this.positionSize(entry, sl, cfg);
+      const riskUsd = size.actualRiskUsd;                 // dollars really at risk at this size
+      const riskBudgetUsd = size.riskUsd;
+      const lots = size.lots;
+      return Object.assign({}, s, { size,
         entry, sl, tp1, tp2, risk,
         rr: PARTIAL_R, rr2: FINAL_R, roomR: FINAL_R,
         nearestSrc: 'momentum (R-based)', tp1Src: '1:2 · book 50%', tp2Src: '1:3 · close 50%',
-        passesRR: true, riskUsd, lots, rewardUsd: riskUsd * PARTIAL_R,
+        passesRR: true, riskUsd, riskBudgetUsd, lots, rewardUsd: Math.round(riskUsd * PARTIAL_R * 100) / 100,
         momentum: true,
         momentumFrom: s.entry,
         checks: Object.assign({}, s.checks, { passesRR: true })
@@ -2006,6 +2159,37 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
      48h on 4H. A flat 3h was too short for higher timeframes and too long for scalps. */
   const pendingTtl = tf => Math.max(3 * 60 * 60 * 1000, 12 * (TF_SECONDS[tf] || 300) * 1000);
 
+  /* ---------------- PRICE SPACE ----------------
+     The charted series is PAXG + (spot − PAXG). That offset is re-calibrated every 60 s and can move
+     by a couple of dollars inside one trade. The candles are re-based when that happens (a re-fetch
+     adds the NEW offset to every bar) but a live trade's entry/SL/TP were frozen in the OLD space — so
+     a 2.8-point stop could be "hit" by the offset moving, on a chart where price never traded there.
+     Every tracked level therefore carries the offset it was measured in, and is re-based with the
+     series whenever that offset changes. */
+  function currentOffset() { return (state.spotOffset || 0) + getCfg().extraOffset; }
+
+  function rebaseLiveTrades() {
+    const now = currentOffset();
+    let moved = 0;
+    state.liveTrades.forEach(tr => {
+      if (!Number.isFinite(tr.offsetAtArm)) { tr.offsetAtArm = now; return; }
+      const d = +(now - tr.offsetAtArm).toFixed(2);
+      if (Math.abs(d) < 0.005) { tr.offsetAtArm = now; return; }
+      ['entry', 'sl', 'tp1', 'tp2', 'zoneTop', 'zoneBottom'].forEach(k => {
+        if (Number.isFinite(tr[k])) tr[k] = +(tr[k] + d).toFixed(2);
+      });
+      tr.offsetAtArm = now;
+      moved++;
+    });
+    if (moved) {
+      log(`[PRICE SPACE] spot/PAXG offset moved to ${now >= 0 ? '+' : ''}${now.toFixed(2)} — `
+        + `${moved} live level set(s) re-based with the candles so a stop is only hit by the market.`, '#f59e0b');
+      persistActiveTrade();
+      syncPrimaryTrade();
+    }
+    return moved;
+  }
+
   function candleForTrade(tr, fallback) {
     const series = state.candles[tr && tr.tf];
     if (series && series.length) return series[series.length - 1];
@@ -2016,18 +2200,26 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
     if (!latestCandle) return;
     const price = latestCandle.close;
 
-    /* 1. AUTO-ARM — one tracked setup per timeframe, several timeframes at once.
-       The old guard was `!state.activeTrade`: ONE trade for the whole terminal. A 15M SELL could
-       never be tracked while a 5M trade held the slot, so good setups silently went unrecorded. */
-    if (state.currentSetup && state.currentSetup.passesRR) {
-      const s = state.currentSetup;
+    /* 1. AUTO-ARM — EVERY TIMEFRAME GETS ITS OWN SLOT (v4.44).
+       Two bugs stacked here. The oldest was `!state.activeTrade`: ONE trade for the whole terminal, so
+       a 15M SELL could never be tracked while a 5M trade held the slot. That was fixed, but the gate
+       still ran once, on `state.currentSetup`, which runFullAnalysis only ever builds for the CHARTED
+       timeframe. Reading the 5M chart therefore meant the 15M could never be armed no matter how good
+       its plan — exactly the "there was a good 15M trade and you did not take it" report. Now each
+       scanned timeframe offers its own best plan, judged on its own bars with its own cooldown. */
+    const ARM_TFS = ['5m', '15m', '1h', '4h'];
+    for (const armTF of ARM_TFS) {
+      const s = (state.currentSetup && state.currentSetup.zone && state.currentSetup.zone.tf === armTF)
+        ? state.currentSetup : bestSetupForTF(armTF);
+      if (!s || !s.passesRR) continue;
       /* judge the setup on the close of ITS OWN timeframe, not whatever chart is on screen */
-      const ownBar = candleForTrade({ tf: s.zone && s.zone.tf }, latestCandle);
+      const ownBar = candleForTrade({ tf: armTF }, latestCandle);
       const ownPrice = (ownBar && Number.isFinite(ownBar.close)) ? ownBar.close : price;
       const zoneKey = s.zone && s.zone.id;
       const alreadySettled = zoneKey && state.settledZoneIds.has(zoneKey);
-      const cooledDown = Date.now() - state.lastArmAt > 60 * 1000;
-      const busyTf = state.liveTrades.some(t => t.tf === s.zone.tf);
+      const lastArmTf = (state.lastArmAtByTf && state.lastArmAtByTf[armTF]) || 0;
+      const cooledDown = Date.now() - lastArmTf > 60 * 1000;
+      const busyTf = state.liveTrades.some(t => t.tf === armTF);
       /* ARM ONLY AT THE ZONE.
          `act.ok` means "within 2.5R and on the right side", which armed setups that were almost two
          full R away from their own entry — and whose target had often already been reached. Those
@@ -2037,7 +2229,7 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
          (inside the band, or within ZONE_LIVE_R of the entry on the correct side). The touch itself is
          then caught by the bar's high/low, not by its close. */
       const act = setupActionability(s, ownPrice);
-      if (!alreadySettled && cooledDown && !busyTf && act.live) armTradeFromSetup(s, false);
+      if (!alreadySettled && cooledDown && !busyTf && act.live) armTradeFromSetup(s, false, ownPrice);
     }
 
     if (!state.liveTrades.length) { syncPrimaryTrade(); return; }
@@ -2070,6 +2262,9 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
         if (touchedBuy || touchedSell || insideZoneNow) {
           tr.status = 'ACTIVE';
           tr.openedAt = Date.now();
+          tr.fillBarTime = bar.time;
+          tr.fillBar = { time: bar.time, high: +bar.high.toFixed(2), low: +bar.low.toFixed(2), close: +bar.close.toFixed(2) };
+          state.journalNeedsRender = true;   // the row's status pill must stop saying PENDING now
           triggerAlert(`Trade ACTIVE (${tr.dir} ${tr.grade})`, `${tr.tf.toUpperCase()} entered @ $${tr.entry.toFixed(2)} | SL $${tr.sl.toFixed(2)} | TP1 $${tr.tp1.toFixed(2)} (1:${tr.rr.toFixed(2)})`, tr.dir);
         } else {
           const invalidated = tr.dir === 'BUY' ? tPrice < tr.sl : tPrice > tr.sl;
@@ -2104,6 +2299,16 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
         if (slHit || finalHit) {
           const finalLeg = slHit ? -0.5 : 0.5 * (tr.rr2 || tr.rr);          // stop wins ties
           const rTotal = tr.booked50 ? Number((tr.realizedR + finalLeg).toFixed(2)) : Number((slHit ? -1 : 0.5 * tr.rr + finalLeg).toFixed(2));
+          /* WHAT CLOSED IT — recorded, so the journal can be checked against the chart instead of
+             asking the reader to take a loss on trust. */
+          tr.exitPrice = +(slHit ? tr.sl : tr.tp2).toFixed(2);
+          tr.closedByBar = { time: bar.time, high: +bar.high.toFixed(2), low: +bar.low.toFixed(2), close: +bar.close.toFixed(2) };
+          tr.touchProof = slHit
+            ? `${tr.dir === 'SELL' ? 'bar high' : 'bar low'} ${(tr.dir === 'SELL' ? bar.high : bar.low).toFixed(2)} `
+              + `${tr.dir === 'SELL' ? '≥' : '≤'} SL ${tr.sl.toFixed(2)}`
+            : `${tr.dir === 'SELL' ? 'bar low' : 'bar high'} ${(tr.dir === 'SELL' ? bar.low : bar.high).toFixed(2)} `
+              + `${tr.dir === 'SELL' ? '≤' : '≥'} TP2 ${tr.tp2.toFixed(2)}`;
+          tr.sameBarFill = Number.isFinite(tr.fillBarTime) && tr.fillBarTime === bar.time;
           tr.status = finalHit && !slHit ? 'TP2 HIT' : (tr.booked50 ? 'PARTIAL+SL' : 'SL HIT');
           tr.result = rTotal > 0 ? 'WIN' : 'LOSS';
           tr.rMultiple = rTotal;
@@ -2237,8 +2442,13 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
     return parts.join(' · ');
   }
 
-  function armTradeFromSetup(s, manual = false) {
+  /* `ownPrice` (v4.44) is the close of the setup's OWN timeframe. The refusals below used to be
+     judged against `state.livePrice` — the price of whatever chart happened to be open — which
+     silently killed every candidate from another timeframe: a 15M demand at 4041.9 was called
+     "done" because the 5M chart was printing 4022.8. */
+  function armTradeFromSetup(s, manual = false, ownPrice = null) {
     if (!s) return;
+    const judgePx = (ownPrice != null && Number.isFinite(ownPrice)) ? ownPrice : state.livePrice;
     /* A plan whose two legs sit at the same price is not a two-leg plan: it means the room falls
        short of the fixed 1:2 partial. Refuse it rather than journalling "50% @ 1:2" twice. */
     if (Math.abs((s.tp2 || 0) - (s.tp1 || 0)) < 1e-9) {
@@ -2248,10 +2458,20 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
     /* A setup whose target is already behind price can never be filled from here — arming it would
        park a PENDING row that dies without a trade. "Track Setup Now" on an EXPIRED card used to do
        exactly that. Refuse out loud instead of creating a phantom. */
-    if (s.zone && state.livePrice != null) {
-      const act = setupActionability(s, state.livePrice);
+    if (s.zone && judgePx != null) {
+      const act = setupActionability(s, judgePx);
       if (act.missed || act.beyondZone) {
         log(`Not tracked — this ${String(s.zone.tf).toUpperCase()} ${s.dir} is done: ${act.reason}.`, '#f59e0b');
+        return null;
+      }
+    }
+    /* A zone drawn by one violent candle is never a trade, and the button that tracks setups must
+       refuse it too — otherwise the plan is refused on the card and accepted by the button. */
+    if (s.zone) {
+      const w = Quant.zoneWidthCheck(s.zone, judgePx);
+      if (w.tooWide) {
+        log(`Not tracked — this ${String(s.zone.tf).toUpperCase()} ${s.zone.type} is ${w.height.toFixed(2)} pts tall `
+          + `(${w.multiple.toFixed(1)}× a normal candle); the limit is ${w.bound.toFixed(2)}.`, '#f59e0b');
         return null;
       }
     }
@@ -2263,6 +2483,7 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
     const tr = {
       id: 'TR_' + Date.now() + '_' + Math.floor(Math.random() * 999),
       mode: 'LIVE',
+      offsetAtArm: currentOffset(),          // the price space these levels were measured in
       tf: s.zone.tf,
       session: sess.short,
       dir: s.dir,
@@ -2274,7 +2495,9 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
       rr: s.rr,
       rr2: s.rr2 || s.rr,
       riskUsd: s.riskUsd,
+      riskBudgetUsd: s.riskBudgetUsd != null ? s.riskBudgetUsd : s.riskUsd,
       lots: s.lots,
+      size: s.size || Quant.positionSize(s.entry, s.sl, getCfg()),
       zoneId: s.zone.id,
       zoneBottom: s.zone.bottom,
       zoneTop: s.zone.top,
@@ -2290,6 +2513,8 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
     };
     state.liveTrades.push(tr);
     state.lastArmAt = Date.now();
+    if (!state.lastArmAtByTf) state.lastArmAtByTf = {};
+    state.lastArmAtByTf[s.zone.tf] = Date.now();
     syncPrimaryTrade();
     persistActiveTrade();
     log(`[TRACK] ${s.zone.tf.toUpperCase()} ${s.dir} (${s.grade}) Pending @ $${s.entry.toFixed(2)} | TP1 $${s.tp1.toFixed(2)} (1:${s.rr.toFixed(2)})`, '#60a5fa');
@@ -2649,23 +2874,99 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
     }).join('');
   }
 
+  /* PATCH THE LIVE ROWS IN PLACE — BY TRADE ID, NEVER BY ROW INDEX.
+     Two defects lived here. (1) `recs[idx]` assumed the i-th live record sits on the i-th row; the
+     moment another row was added or removed, a live row could be repainted with ANOTHER trade's
+     numbers — a running +1.00R trade showing a closed trade's −1.00R. (2) The Result pill was never
+     patched at all, so a trade that filled kept reading "PENDING · awaiting fill" in the journal
+     while the tracker beside it said ACTIVE. Both are fixed: rows carry their trade id, and the
+     status is repainted along with R, PnL and duration. */
   function refreshLiveJournalCells() {
     const recs = liveJournalRecords();
     const shown = document.querySelectorAll('#journalTbody [data-live-cell]').length;
     if (recs.length !== state.liveTrades.length || (recs.length && !shown)) { renderJournalTable(); return; }
     if (!recs.length) return;
     const col = v => v > 0 ? 'var(--buy)' : v < 0 ? 'var(--sell)' : 'var(--text-secondary)';
-    document.querySelectorAll('#journalTbody tr[data-idx]').forEach(rowEl => {
-      const idx = parseInt(rowEl.getAttribute('data-idx'), 10);
-      const rec = recs[idx];
+    const byId = new Map(recs.map(r => [r.id, r]));
+    document.querySelectorAll('#journalTbody tr[data-trade-id]').forEach(rowEl => {
+      const rec = byId.get(rowEl.getAttribute('data-trade-id'));
       if (!rec) return;
       const rEl = rowEl.querySelector('[data-live-cell="r"]');
       const pEl = rowEl.querySelector('[data-live-cell="pnl"]');
       const dEl = rowEl.querySelector('[data-live-cell="dur"]');
+      const pill = rowEl.querySelector('[data-live-cell="result"]');
       if (rEl) { rEl.textContent = rec._filled ? (rec.rMultiple > 0 ? '+' : '') + rec.rMultiple.toFixed(2) + 'R' : '—'; rEl.style.color = col(rec.rMultiple); }
       if (pEl) { pEl.textContent = rec._filled ? (rec.pnlUsd >= 0 ? '+$' : '-$') + Math.abs(rec.pnlUsd).toFixed(2) : '—'; pEl.style.color = col(rec.pnlUsd); }
       if (dEl) { dEl.textContent = rec._elapsedMin + 'm'; }
+      if (pill) {
+        pill.textContent = rec.status === 'ACTIVE' ? 'OPEN · live' : 'PENDING · awaiting fill';
+        pill.className = 'pill ' + (rec.status === 'ACTIVE' ? 'pill-warn' : 'pill-neutral');
+      }
     });
+  }
+
+  /* The journal row and the tracker card must never quote different numbers for the same trade.
+     If they ever do, say so in red instead of letting the user discover it. */
+  function auditLiveNumbers() {
+    const tr = state.liveTrades.find(t => t.tf === state.activeTF);
+    if (!tr || tr.status !== 'ACTIVE' || state.livePrice == null) return;
+    const risk = Math.abs(tr.entry - tr.sl);
+    if (!(risk > 0)) return;
+    const floatR = (tr.dir === 'BUY' ? state.livePrice - tr.entry : tr.entry - state.livePrice) / risk;
+    const row = document.querySelector(`#journalTbody tr[data-trade-id="${tr.id}"] [data-live-cell="r"]`);
+    if (!row) return;
+    const shownTxt = row.textContent.trim();
+    if (shownTxt === '—') return;
+    const shown = parseFloat(shownTxt.replace(/[^\-0-9.]/g, ''));
+    if (Number.isFinite(shown) && Math.abs(shown - floatR) > 0.02 && state._lastMismatchId !== tr.id + shownTxt) {
+      state._lastMismatchId = tr.id + shownTxt;
+      log(`[MISMATCH] journal shows ${shownTxt} while the tracker shows ${floatR >= 0 ? '+' : ''}${floatR.toFixed(2)}R for the same trade — reported.`, '#ef4444');
+      renderJournalTable();
+    }
+  }
+
+  /* The Exit cell answers "was it really touched?" with the bar that did it, not with a promise. */
+  /* HOW THE LOT SIZE WAS DERIVED — the risk is fixed, the size is what moves with the stop. */
+  function paintSizeWhy(s) {
+    const el = $('pLotWhy');
+    if (!el) return;
+    const cfg = getCfg();
+    const size = (s && s.size) || (s ? Quant.positionSize(s.entry, s.sl, cfg) : null);
+    if (!size) { el.textContent = '—'; return; }
+    el.innerHTML = `${size.formula}`
+      + `<br>budget <b>$${size.riskUsd.toFixed(0)}</b>`
+      + `<span style="color:var(--text-muted);"> (${Number(cfg.riskPct).toFixed(1)}% of $${Number(cfg.balance).toLocaleString()})</span>`
+      + ` · at risk <b style="color:${size.belowMin ? 'var(--sell)' : 'var(--buy)'};">$${size.actualRiskUsd.toFixed(2)}</b>`
+      + (size.belowMin
+          ? `<br><span style="color:var(--sell);">stop too wide for a $${size.riskUsd.toFixed(0)} budget — 0.01 lots is the minimum and it risks $${size.minRiskUsd.toFixed(2)}</span>`
+          : `<span style="color:var(--text-muted);"> (size rounded down to 0.01 lots, so the risk can never exceed the budget)</span>`);
+  }
+
+  function exitCellText(t) {
+    if (!t) return '—';
+    if (t._live) return t.status === 'ACTIVE' ? 'open' : '—';
+    if (!Number.isFinite(t.exitPrice)) return '—';           // rows that predate v4.42
+    const at = t.closedByBar && Number.isFinite(t.closedByBar.time)
+      ? new Date(t.closedByBar.time * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      : null;
+    const leg = /SL/.test((t.legs || []).join(' ')) ? 'SL' : 'TP2';
+    return `$${Number(t.exitPrice).toFixed(2)} ${leg}${at ? ` · ${at}` : ''}${t.sameBarFill ? ' · fill bar' : ''}`;
+  }
+
+  /* proves the journal's $ P/L came from a position sized to the fixed risk */
+  function sizeCellTitle(t) {
+    const riskPts = Math.abs(Number(t.entry) - Number(t.sl));
+    if (!Number.isFinite(riskPts) || !Number.isFinite(Number(t.lots))) return '';
+    const atRisk = Number(t.lots) * riskPts * 100;
+    const budget = Number(t.riskBudgetUsd != null ? t.riskBudgetUsd : t.riskUsd) || 0;
+    return `${Number(t.lots).toFixed(2)} lots × ${riskPts.toFixed(2)} pts × $100/pt = `
+      + `$${atRisk.toFixed(2)} at risk` + (budget ? ` (budget $${budget.toFixed(0)})` : '');
+  }
+
+  function exitCellTitle(t) {
+    if (!t || t._live) return '';
+    if (!t.touchProof) return 'This row predates v4.42 — the closing bar was not recorded';
+    return `${t.touchProof}${t.sameBarFill ? ' · stop and entry touched in the same candle' : ''}`;
   }
 
   function renderJournalTable() {
@@ -2693,7 +2994,7 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
 
     const tbody = $('journalTbody');
     if (!rows.length) {
-      tbody.innerHTML = `<tr><td colspan="15" style="text-align:center;color:var(--text-muted);padding:24px;">No trade records match filters yet. Click "▶ Run Backtest (300 Bars)" in the top bar or wait for a live trade to close.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="17" style="text-align:center;color:var(--text-muted);padding:24px;">No trade records match filters yet. Click "▶ Run Backtest (300 Bars)" in the top bar or wait for a live trade to close.</td></tr>`;
       return;
     }
 
@@ -2712,7 +3013,7 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
         ? (t.status === 'ACTIVE' ? 'Entry filled — floating P/L, not counted in Stats until TP or SL'
                                  : 'Waiting for price to touch the entry — not counted in Stats yet')
         : (t.cancelReason ? 'Cancelled — ' + t.cancelReason : '');
-      return `<tr data-idx="${idx}"${live ? ' style="background:rgba(96,165,250,0.07);"' : ''}>
+      return `<tr data-idx="${idx}" data-trade-id="${t.id}"${live ? ' style="background:rgba(96,165,250,0.07);"' : ''}>
         <td class="mono">${dt}</td>
         <td><span class="pill pill-neutral">${t.mode || 'LIVE'}</span></td>
         <td class="mono">${(t.tf || '5m').toUpperCase()}</td>
@@ -2720,10 +3021,12 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
         <td><span class="pill ${dirClass}">${t.dir} ${t.grade || ''}</span></td>
         <td class="mono">$${Number(t.entry).toFixed(2)}</td>
         <td class="mono">$${Number(t.sl).toFixed(2)}</td>
+        <td class="mono" title="${sizeCellTitle(t)}">${Number(t.lots || 0).toFixed(2)}</td>
         <td class="mono">$${Number(t.tp1).toFixed(2)}</td>
+        <td class="mono" data-live-cell="exit"${live ? '' : ''} title="${exitCellTitle(t)}" style="color:${!live && t.touchProof ? (t.result === 'WIN' ? 'var(--buy)' : 'var(--sell)') : 'var(--text-secondary)'};">${exitCellText(t)}</td>
         <td class="mono">1:${Number(t.rr).toFixed(2)}</td>
         <td class="why-cell" title="${journalWhy(t).replace(/"/g, '&quot;')}">${journalWhy(t)}</td>
-        <td><span class="pill ${resClass}" title="${resTitle}">${resText}</span></td>
+        <td><span class="pill ${resClass}" title="${resTitle}"${live ? ' data-live-cell="result"' : ''}>${resText}</span></td>
         <td class="mono" title="${legNote}"${live ? ` id="jLiveR_${idx}" data-live-cell="r"` : ''} style="color:${t.rMultiple > 0 ? 'var(--buy)' : t.rMultiple < 0 ? 'var(--sell)' : 'var(--text-secondary)'};">${live && !t._filled ? '—' : (t.rMultiple > 0 ? '+' : '') + Number(t.rMultiple || 0).toFixed(2) + 'R'}</td>
         <td class="mono"${live ? ` id="jLivePnl_${idx}" data-live-cell="pnl"` : ''} style="color:${t.pnlUsd > 0 ? 'var(--buy)' : t.pnlUsd < 0 ? 'var(--sell)' : 'var(--text-secondary)'};">${live && !t._filled ? '—' : (t.pnlUsd >= 0 ? '+$' : '-$') + Math.abs(t.pnlUsd || 0).toFixed(2)}</td>
         <td class="mono"${live ? ` id="jLiveDur_${idx}" data-live-cell="dur"` : ''}>${durMin}</td>
@@ -3245,12 +3548,18 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
     const beyondEntry = s.dir === 'BUY' ? price > s.entry : price < s.entry;
     const momentum = !missed && !inZone && !beyondZone && beyondEntry;
     const live = !missed && !beyondZone && (inZone || (!wrongSide && distR <= ZONE_LIVE_R));
+    /* LATE ZONE. A supply/demand needs one impulse candle plus three candles of displacement to be
+       confirmed — so a violent move CREATES the zone as it goes. By the time such a zone exists the
+       fill is already behind the market, and reading it as "the terminal ignored a zone that was
+       there all along" is the wrong reading. Say it instead of leaving it to be guessed. */
+    const lateZone = !inZone && distR >= 2 && (momentum || missed || beyondEntry);
     const ok = !missed && !wrongSide && distR <= TRIGGER_RANGE_R;   // auto-tracker may arm this early
     const level = missed ? 'MISSED' : live ? 'LIVE' : beyondZone ? 'PAST' : ok ? 'WATCH' : 'FAR';
     return {
-      level, ok, live, distR, wrongSide, inZone, beyondZone, missed, momentum, beyondEntry,
+      level, ok, live, distR, wrongSide, inZone, beyondZone, missed, momentum, beyondEntry, lateZone,
       reason: missed
         ? `price already ran past TP1 $${s.tp1.toFixed(2)} — this setup is spent`
+          + (lateZone ? `; the move that created it was ${distR.toFixed(1)}R deep before it appeared` : '')
         : momentum
           ? `zone confirmed without a retest — price is already ${distR.toFixed(2)}R past the entry`
         : live
@@ -3542,7 +3851,12 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
       if (sRes && sRes.price && pRes && pRes.price) {
         const spot = parseFloat(sRes.price), paxg = parseFloat(pRes.price);
         const diff = spot - paxg;
-        if (Math.abs(diff) < 300) state.spotOffset = diff;
+        if (Math.abs(diff) < 300 && Math.abs(diff - state.spotOffset) > 0.004) {
+          state.spotOffset = diff;
+          rebaseLiveTrades();                  // keep live levels in the same space as the candles
+        } else if (Math.abs(diff) < 300) {
+          state.spotOffset = diff;
+        }
         const totalOff = state.spotOffset + getCfg().extraOffset;
         $('bannerOffset').textContent = (totalOff >= 0 ? '+' : '') + totalOff.toFixed(2);
         $('stSpotSub').textContent = `Spot: $${spot.toFixed(2)} | PAXG: $${paxg.toFixed(2)}`;
@@ -3603,6 +3917,32 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
     queueOverlayDraw();
   }
 
+  /* THE BEST PLAN ON ONE TIMEFRAME.
+     Until v4.44 this logic lived inside runFullAnalysis and was only ever run for the CHARTED
+     timeframe — so the auto-arm loop, which reads a single `state.currentSetup`, could only ever arm
+     the chart on screen. A 15M demand could build a perfect 1:2 plan and never be tracked unless the
+     user happened to be looking at the 15M chart. This returns the same "best" choice for any
+     timeframe, from that timeframe's own zones and swings. */
+  function bestSetupForTF(tf) {
+    const scan = state.analysis[tf];
+    if (!scan || state.livePrice == null) return null;
+    const cfg = getCfg();
+    const allZones = ['5m', '15m', '1h', '4h'].reduce((acc, t) => {
+      const sc = state.analysis[t];
+      return sc ? acc.concat(sc.supply, sc.demand) : acc;
+    }, []);
+    const fresh = scan.supply.concat(scan.demand).filter(z => !z.broken);
+    fresh.sort((a, b) => Math.abs(a.mid - state.livePrice) - Math.abs(b.mid - state.livePrice));
+    const setups = fresh.map(z => Quant.buildSwingSetup(z, allZones, scan.swings, state.bias4h, state.bias1h, cfg)).filter(Boolean);
+    /* Prefer a setup that is still tradable. A zone whose target price has already been passed is
+       spent — it must not hog the slot while another zone is still valid. */
+    const actOf = st => setupActionability(st, state.livePrice);
+    return setups.find(st => st.passesRR && !actOf(st).missed)
+      || setups.find(st => !actOf(st).missed)
+      || setups.find(st => st.passesRR)
+      || setups[0] || null;
+  }
+
   function runFullAnalysis() {
     state.bias4h = Quant.computeHTFBias(state.candles['4h']);
     state.bias1h = Quant.computeHTFBias(state.candles['1h']);
@@ -3627,21 +3967,18 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
 
     if (scan && state.livePrice != null) {
       const cfg = getCfg();
-      const fresh = scan.supply.concat(scan.demand).filter(z => !z.broken);
-      fresh.sort((a, b) => Math.abs(a.mid - state.livePrice) - Math.abs(b.mid - state.livePrice));
-      const setups = fresh.map(z => Quant.buildSwingSetup(z, allZones, scan.swings, state.bias4h, state.bias1h, cfg)).filter(Boolean);
-      /* Prefer a setup that is still tradable. A zone whose target price has already been passed is
-         spent — it must not hog the card while another zone is still valid. */
-      const actOf = st => setupActionability(st, state.livePrice);
-      state.currentSetup = setups.find(st => st.passesRR && !actOf(st).missed)
-        || setups.find(st => !actOf(st).missed)
-        || setups.find(st => st.passesRR)
-        || setups[0] || null;
+      state.currentSetup = bestSetupForTF(scanTF, false);
       /* With momentum entry enabled, a setup whose retest never came becomes a tradeable plan at
          the confirmation price instead of a "WAIT" for a retest that is not happening. */
       if (cfg.momentum && state.currentSetup) {
-        const act = actOf(state.currentSetup);
-        const mom = (act.momentum || act.ok) ? Quant.momentumSetup(state.currentSetup, state.livePrice, cfg) : null;
+        const act = setupActionability(state.currentSetup, state.livePrice);
+        const base = state.currentSetup;
+        /* Momentum changes WHERE the entry is taken, never WHETHER the setup is allowed. A zone that
+           the filter refused, or one drawn by a single violent candle, must not become tradeable just
+           because the entry model is "take the break". */
+        const eligible = base.passesRR && !base.zoneTooWide;
+        const mom = eligible && (act.momentum || act.ok)
+          ? Quant.momentumSetup(base, state.livePrice, cfg) : null;
         if (mom) state.currentSetup = mom;
       }
     }
@@ -3722,12 +4059,15 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
     $('pTP2').textContent = '$' + num2(tr.tp2);
     $('pRR').textContent = `1 : ${Number(tr.rr).toFixed(2)}`;
     $('pLots').textContent = `${num2(tr.lots || 0)} Lots`;
+    paintSizeWhy(tr);
     $('pUsd').textContent = `-$${num2(tr.riskUsd || 0, 0)} / +$${num2((tr.riskUsd || 0) * Number(tr.rr || 2), 0)}`;
 
     $('gcBias').textContent = tr.dir === 'BUY' ? '✓ Long' : '✓ Short';
     $('gcFresh').textContent = booked ? '✓ 50% booked' : (filled ? '✓ Filled' : '— Pending');
     $('gcVol').textContent = '—'; $('gcSweep').textContent = '—';
-    $('gcRR').textContent = `✓ 1:${Number(tr.rr).toFixed(2)} → 1:${rr2.toFixed(2)}`;
+    $('gcRR').textContent = tr.fixedR
+      ? `✓ fixed 1:${Number(tr.rr).toFixed(0)}→1:${rr2.toFixed(0)}`
+      : `✓ 1:${Number(tr.rr).toFixed(2)} → 1:${rr2.toFixed(2)}`;
 
     const fc = $('filterCard');
     fc.hidden = false;
@@ -3773,8 +4113,11 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
       const setupTF = (s.zone && s.zone.tf ? s.zone.tf : state.activeTF).toUpperCase();
       const act = setupActionability(s, p);
       if (!s.passesRR) {
-        sigPill.textContent = `${setupTF} ${s.dir} SKIP`;
-        sigPill.title = `${setupTF} setup fails the R:R filter`;
+        sigPill.textContent = s.sizeOk === false ? `${setupTF} ${s.dir} UNSIZEABLE`
+          : s.zoneTooWide ? `${setupTF} ${s.dir} TOO WIDE` : `${setupTF} ${s.dir} SKIP`;
+        sigPill.title = s.zoneTooWide
+          ? `this zone is ${s.zoneHeight.toFixed(2)} points tall — ${s.zoneWidthMultiple.toFixed(1)}× a normal candle`
+          : `${setupTF} setup fails the R:R filter`;
         sigPill.className = 'pill pill-neutral';
       } else if (s.momentum) {
         /* Momentum entry (opt-in): the retest never came, so the trade is taken at the
@@ -3810,49 +4153,99 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
         : 'pill pill-neutral';
 
       const roomTxt = s.roomR >= 50 ? 'open air' : `${s.roomR.toFixed(2)}R`;
+      /* the veto the plan was judged against, for every card that quotes a refusal */
+      const vetoUsed = Number.isFinite(s.vetoR) ? s.vetoR : 2;
+      const vetoLabel = vetoUsed >= 2 ? `1:${cfg.minRR}` : `${vetoUsed.toFixed(1)}R`;
       /* A setup with less than 2R of room has no valid two-leg plan, so printing
          "1:2.00 → 1:2.00" was a plan that does not exist. Say what is missing instead. */
-      $('stRRVal').textContent = !s.passesRR
+      $('stRRVal').textContent = s.zoneTooWide
+        ? `no plan · zone ${s.zoneWidthMultiple.toFixed(1)}× a candle`
+        : !s.passesRR
         ? `no 1:2 plan · ${roomTxt} room`
         : `1:${s.rr.toFixed(2)} → 1:${s.rr2.toFixed(2)}`;
       const rrCardLbl = $('stSetupTfTag');
       if (rrCardLbl) { rrCardLbl.textContent = setupTF; }
       /* This card sits right next to the signal card, so it must not contradict it: an expired
          setup used to read "WATCH · 3.3R" while the signal card beside it said EXPIRED. */
-      rrPill.textContent = s.momentum
+      rrPill.textContent = s.zoneTooWide
+        ? `TOO WIDE · ${s.zoneWidthMultiple.toFixed(1)}× a candle`
+        : s.momentum
         ? `PASS · 1:${s.rr.toFixed(0)} → 1:${s.rr2.toFixed(0)} (R-based)`
         : act.missed
         ? 'EXPIRED (past TP1)'
         : !s.passesRR
-        ? 'SKIP (<1:' + cfg.minRR + ')'
+        ? 'SKIP (<' + (vetoUsed >= 2 ? '1:' + cfg.minRR : vetoUsed.toFixed(1) + 'R') + ')'
         : (act.live ? 'PASS (≥1:' + cfg.minRR + ')' : `WATCH · ${roomTxt}`);
       rrPill.className = 'pill ' + (act.missed || !s.passesRR ? 'pill-warn' : act.live ? 'pill-buy' : 'pill-neutral');
-      $('stTargetsSub').textContent = `${setupTF} · 50% @ $${s.tp1.toFixed(1)} (1:${s.rr.toFixed(1)}) | 50% @ $${s.tp2.toFixed(1)} (1:${s.rr2.toFixed(1)})`;
+      const warnStructure = s.structureInsideTargets
+        ? ` · ⚠ ${s.nearestSrc} only ${s.roomR.toFixed(2)}R away — target sits through it` : '';
+      $('stTargetsSub').textContent = s.zoneTooWide
+        ? `${setupTF} · zone ${s.zoneHeight.toFixed(2)} pts = ${s.zoneWidthMultiple.toFixed(1)}× a normal candle (limit ${s.zoneWidthBound.toFixed(2)}) — drawn, not traded`
+        : !s.passesRR
+        ? `${setupTF} · no two-leg plan — only ${s.roomR.toFixed(2)}R of room to ${s.nearestSrc}`
+        : `${setupTF} · 50% @ $${s.tp1.toFixed(1)} (1:${s.rr.toFixed(1)}) | 50% @ $${s.tp2.toFixed(1)} (1:${s.rr2.toFixed(1)})${warnStructure}`;
+      if (act.lateZone && !s.zoneTooWide) {
+        $('stTargetsSub').textContent += ` · late zone (${act.distR.toFixed(1)}R past entry)`;
+      }
+
 
       // Side Panel Details
       $('pDirGrade').textContent = s.momentum ? `${s.dir} MOMENTUM · ${setupTF}`
         : act.missed ? `${s.dir} EXPIRED · ${setupTF}`
+        : !s.passesRR ? `${s.dir} SKIP · ${setupTF}`
         : act.live ? `${s.dir} (${s.grade}) · ${setupTF}` : `${s.dir} PLAN · ${setupTF}`;
       $('pDirGrade').style.color = s.momentum ? (s.dir === 'BUY' ? 'var(--buy)' : 'var(--sell)')
         : act.missed ? 'var(--warn, #d9a441)'
         : act.live ? (s.dir === 'BUY' ? 'var(--buy)' : 'var(--sell)') : 'var(--text-muted)';
+      const num = (v, d = 2) => (Number.isFinite(v) ? v.toFixed(d) : '—');
       $('pEntry').textContent = '$' + s.entry.toFixed(2);
       $('pSL').textContent = '$' + s.sl.toFixed(2);
-      $('pTP1').textContent = '$' + s.tp1.toFixed(2);
-      $('pTP2').textContent = '$' + s.tp2.toFixed(2);
-      $('pRR').textContent = `1 : ${s.rr.toFixed(2)}`;
-      const num = (v, d = 2) => (Number.isFinite(v) ? v.toFixed(d) : '—');
-      $('pLots').textContent = `${num(s.lots)} Lots`;
-      $('pUsd').textContent = `-$${num(s.riskUsd, 0)} / +$${num(s.rewardUsd, 0)}`;
+      if (s.zoneTooWide) {
+        $('pTP1').textContent = '— (zone too wide)';
+        $('pTP2').textContent = '— (zone too wide)';
+        $('pRR').textContent = `— · stop would risk ${s.risk.toFixed(2)} pts`;
+        $('pLots').textContent = '— (skipped)';
+        if ($('pLotWhy')) $('pLotWhy').textContent = 'no size for a plan that is not taken';
+        $('pUsd').textContent = `-$${num(s.riskUsd, 0)} / +$0 (not taken)`;
+      } else if (!s.passesRR) {
+        /* NO PLAN FOR A SETUP THAT CANNOT BE TAKEN.
+           This used to print a full plan anyway, and with less than 2R of room TP1 and TP2 collapse
+           onto the same price — the card showed "TP1 $4009.86 / TP2 $4009.86, R:R 1:2.00" for a
+           setup it had just refused. Say what is missing instead. */
+        $('pTP1').textContent = s.roomShortOfPartial ? '— (no 1:2)' : '$' + s.tp1.toFixed(2) + ` · only ${s.roomR.toFixed(2)}R`;
+        $('pTP2').textContent = '— (no room)';
+        $('pRR').textContent = `— · ${s.roomR >= 50 ? 'open air' : s.roomR.toFixed(2) + 'R'} room`;
+        $('pLots').textContent = '— (skipped)';
+        if ($('pLotWhy')) $('pLotWhy').textContent = 'no size for a plan that is not taken';
+        $('pUsd').textContent = `-$${num(s.riskUsd, 0)} / +$0 (not taken)`;
+      } else {
+        $('pTP1').textContent = '$' + s.tp1.toFixed(2);
+        $('pTP2').textContent = '$' + s.tp2.toFixed(2);
+        $('pRR').textContent = `1 : ${s.rr.toFixed(2)}`;
+        $('pLots').textContent = `${num(s.lots)} Lots`;
+        paintSizeWhy(s);
+        const rewardShown = s.rewardUsd != null ? s.rewardUsd
+          : (Number(s.lots || 0) * Math.abs(Number(s.entry) - Number(s.sl)) * 100 * Number(s.rr || 2));
+        $('pUsd').textContent = `-$${num(s.riskUsd, 0)} / +$${num(rewardShown, 0)}`;
+      }
 
       $('gcBias').textContent = s.checks.bothHtfAligned ? '✓ 4H+1H Match' : s.checks.htfAligned ? '✓ Partial' : '✕ Counter';
       $('gcFresh').textContent = s.checks.isFresh ? '✓ Fresh Zone' : '⚠ Retested';
       $('gcVol').textContent = s.checks.hasVol ? '✓ Vol > SMA20' : '— Standard';
       $('gcSweep').textContent = s.checks.swept ? '✓ Swept Swing' : '— Internal';
-      $('gcRR').textContent = s.checks.passesRR
+      /* Every card that quotes a target must say whether structure set it or the fixed-R rule did,
+         so nobody has to guess why a target sits past a swing. */
+      $('gcRR').textContent = s.zoneTooWide
+        ? `✕ zone too wide`
+        : s.targetsRBased
+        ? `✓ ${s.fixedR ? 'fixed' : 'R-based'} 1:${s.rr.toFixed(0)}→1:${(s.rr2 || s.rr).toFixed(0)}`
+          + (s.structureInsideTargets ? ` · ${s.roomR.toFixed(2)}R wall ignored` : '')
+        : s.checks.passesRR
         ? `✓ ${s.roomR >= 50 ? 'open air' : s.roomR.toFixed(2) + 'R'} room`
         : `✕ ${s.roomR.toFixed(2)}R < 1:${cfg.minRR}`;
-      const sideNote = s.momentum
+      const sideNote = s.zoneTooWide
+        ? `zone is ${s.zoneHeight.toFixed(2)} pts tall (${s.zoneWidthMultiple.toFixed(1)}× a normal candle) — drawn, not tradeable`
+        : s.momentum
         ? `no retest — break entry at $${s.entry.toFixed(2)}, stop beyond the zone at $${s.sl.toFixed(2)}`
         : act.live
         ? (act.inZone ? `price inside the zone · ${s.dir} entry live` : `price at entry · take the ${s.dir}`)
@@ -3861,7 +4254,13 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
             : act.beyondZone
               ? `price broke the zone — setup dead, waiting for a new one`
               : `${act.distR.toFixed(2)}R from entry — no signal until price reaches $${s.entry.toFixed(2)}`);
-      $('stSignalSub').textContent = `${setupTF} ${s.zone.type} @ $${(s.zone.mid).toFixed(2)} · ${sideNote}`;
+      /* A zone can only exist once its impulse + three displacement candles have closed, so a violent
+         move CREATES the zone it appears to have respected. Keep the mechanical reason (expired,
+         beyond the zone, live) and add the fact rather than replacing it. */
+      const lateNote = act.lateZone && !s.zoneTooWide
+        ? ` — this move made the zone: it appeared ${act.distR.toFixed(1)}R (${Math.abs(s.entry - state.livePrice).toFixed(2)} pts) past its own entry`
+        : '';
+      $('stSignalSub').textContent = `${setupTF} ${s.zone.type} @ $${(s.zone.mid).toFixed(2)} · ${sideNote}${lateNote}`;
 
       // ---- FILTERED card: shown whenever the nearest setup fails the R:R filter ----
       const fc = $('filterCard');
@@ -3872,39 +4271,74 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
            read "R:R 2.00 is below the 1:2 minimum" — a sentence that contradicts itself. */
         const beyond = Number.isFinite(s.nextRoomR) && s.nextSrc
           ? ` · next structure ${s.nextRoomR.toFixed(2)}R to ${s.nextSrc}` : '';
-        $('fcRR').textContent =
-          `Room ${s.roomR >= 50 ? 'open air' : s.roomR.toFixed(2) + 'R'} < 1:${cfg.minRR} to ${s.nearestSrc}`
+        $('fcRR').textContent = s.sizeOk === false
+          ? `Stop ${s.risk.toFixed(2)} pts — at 0.01 lots that risks $${s.size.minRiskUsd.toFixed(0)}, not $${s.size.riskUsd.toFixed(0)}`
+          : s.zoneTooWide
+          ? `Zone ${s.zoneHeight.toFixed(2)} pts = ${s.zoneWidthMultiple.toFixed(1)}× a normal candle (limit ${s.zoneWidthBound.toFixed(2)})`
+          : `Room ${s.roomR >= 50 ? 'open air' : s.roomR.toFixed(2) + 'R'} < ${vetoLabel} to ${s.nearestSrc}`
           + (s.nearestPrice ? ` $${s.nearestPrice.toFixed(2)}` : '') + beyond;
-        $('fcPrices').textContent =
-          `Entry ${s.entry.toFixed(2)}   SL ${s.sl.toFixed(2)}   TP1 ${s.tp1.toFixed(2)}`;
+        /* A refused setup shows no plan: printing Entry / SL / TP1 here was the last place the old
+           code still quoted a trade for a zone it had already decided not to take. */
+        $('fcPrices').textContent = s.zoneTooWide
+          ? `Zone ${s.zone.bottom.toFixed(2)} – ${s.zone.top.toFixed(2)}   ${s.zoneHeight.toFixed(2)} pts   · no entry, no stop, no target`
+          : `Entry ${s.entry.toFixed(2)}   SL ${s.sl.toFixed(2)}   TP1 ${s.tp1.toFixed(2)}`;
         /* The nearest structure is where TP would SIT, so name it as the target. The old wording
            ("room to the swing low") read like a bullish argument for a SELL. */
-        $('fcReason').textContent =
-          `${s.dir} ${s.zone.tf.toUpperCase()} ${s.zone.type} not taken — the ${s.nearestSrc.toLowerCase()}`
+        $('fcReason').textContent = s.sizeOk === false
+          ? `${s.dir} ${s.zone.tf.toUpperCase()} ${s.zone.type} not taken — the stop is ${s.risk.toFixed(2)} points, `
+            + `so a $${s.size.riskUsd.toFixed(0)} risk needs ${s.size.rawLots.toFixed(3)} lots. The smallest size `
+            + `available is ${s.size.MIN_LOT || 0.01} lots, which would risk $${s.size.minRiskUsd.toFixed(0)} — `
+            + `${(s.size.minRiskUsd / Math.max(1, s.size.riskUsd)).toFixed(1)}× the risk you set. Narrow the stop or raise Risk Per Trade.`
+          : s.zoneTooWide
+          ? `${s.dir} ${s.zone.tf.toUpperCase()} ${s.zone.type} not taken — this zone is ${s.zoneHeight.toFixed(2)} `
+            + `points tall, ${s.zoneWidthMultiple.toFixed(1)}× a normal ${String(s.zone.tf).toUpperCase()} candle `
+            + `(${s.zoneMedianRange.toFixed(2)} pts). A stop beyond it would risk ${s.risk.toFixed(2)} points; `
+            + `the limit is ${s.zoneWidthBound.toFixed(2)}. The zone is drawn, but it is not a trade.`
+          : `${s.dir} ${s.zone.tf.toUpperCase()} ${s.zone.type} not taken — the ${s.nearestSrc.toLowerCase()}`
           + (s.nearestPrice ? ` at $${s.nearestPrice.toFixed(2)}` : '')
           + ` is the level your take-profit would sit at, and it is only ${s.roomR.toFixed(2)}R away`
           + (s.roomShortOfPartial
               ? `. The 1:2 partial is fixed at 2.00R, so the half-size exit would land past that target. Lowering the filter will not help — wait for a zone with 2R of clear room.`
               : s.roomShortOfRunner
               ? `. That is enough for the 1:2 partial but leaves the 1:3 runner with nowhere to go, so the two exits would sit at the same price. Wait for clear room past ${s.nearestPrice ? '$' + s.nearestPrice.toFixed(2) : 'that level'}.`
-              : `, under your Minimum R:R Filter of ${cfg.minRR.toFixed(2)}. Lower it in Settings to take this one.`);
+              : `, under your Structure Veto of ${(Number.isFinite(s.vetoR) ? s.vetoR : 2).toFixed(1)}R. Lower it in Settings to take this one.`);
         $('fcPill').textContent = 'SKIPPED';
         $('fcPill').className = 'pill pill-sell fc-pill';
         if (state.lastFilteredZoneId !== s.zone.id) {
           state.lastFilteredZoneId = s.zone.id;
-          log(`FILTERED — only ${s.roomR.toFixed(2)}R of room to the ${s.nearestSrc.toLowerCase()}`
-            + (s.nearestPrice ? ` $${s.nearestPrice.toFixed(2)}` : '')
-            + ` (min 1:${cfg.minRR}) — Entry ${s.entry.toFixed(2)} SL ${s.sl.toFixed(2)} TP1 ${s.tp1.toFixed(2)}`
-            + ` (${s.dir} ${s.zone.tf.toUpperCase()} skipped)`, '#f87171');
+          log(s.zoneTooWide
+            ? `FILTERED — the ${String(s.zone.tf).toUpperCase()} ${s.zone.type} is ${s.zoneHeight.toFixed(2)} pts tall `
+              + `(${s.zoneWidthMultiple.toFixed(1)}× a normal candle, limit ${s.zoneWidthBound.toFixed(2)}) — drawn, not traded`
+            : `FILTERED — only ${s.roomR.toFixed(2)}R of room to the ${s.nearestSrc.toLowerCase()}`
+              + (s.nearestPrice ? ` $${s.nearestPrice.toFixed(2)}` : '')
+              + ` (min 1:${cfg.minRR}) — Entry ${s.entry.toFixed(2)} SL ${s.sl.toFixed(2)} TP1 ${s.tp1.toFixed(2)}`
+              + ` (${s.dir} ${s.zone.tf.toUpperCase()} skipped)`, '#f87171');
         }
       } else {
-        fc.hidden = true;
+        const showBanner = s.targetsRBased && s.structureInsideTargets;
+        fc.hidden = !showBanner;
         state.lastFilteredZoneId = null;
+        if (showBanner) {
+          const label = s.fixedR ? 'FIXED R' : 'THROUGH STRUCTURE';
+          $('fcTag').textContent = label;
+          $('fcRR').textContent = `1:${s.rr.toFixed(2)} → 1:${(s.rr2 || s.rr).toFixed(2)} — structure at ${s.roomR.toFixed(2)}R priced through`;
+          $('fcPrices').textContent = `Entry ${s.entry.toFixed(2)}   SL ${s.sl.toFixed(2)}   TP1 ${s.tp1.toFixed(2)}   TP2 ${s.tp2.toFixed(2)}`;
+          $('fcReason').textContent = (s.fixedR
+              ? `Targets come from the fixed R rule, not from structure. `
+              : `Targets come from R, because your Structure Veto is ${s.vetoR.toFixed(1)}R and this wall is further away than that. `)
+            + `${s.nearestSrc}` + (s.nearestPrice ? ` at $${s.nearestPrice.toFixed(2)}` : '')
+            + ` sits ${s.roomR.toFixed(2)}R away, so the ${s.dir === 'BUY' ? 'long' : 'short'} has to trade through it. `
+            + (s.fixedR ? `Switch Target Model back to "Structure veto" in Settings to refuse these again.`
+                        : `Raise Structure Veto to 2.0R in Settings to refuse these again.`);
+          $('fcPill').textContent = label;
+          $('fcPill').className = 'pill pill-warn fc-pill';
+        }
       }
     } else {
       // No qualifying setup right now — clear the panel instead of leaving the last
       // setup's prices on screen as if they were still valid.
       ['pDirGrade', 'pEntry', 'pSL', 'pTP1', 'pTP2', 'pRR', 'pLots', 'pUsd'].forEach(id => { $(id).textContent = '—'; });
+      if ($('pLotWhy')) $('pLotWhy').textContent = '—';
       ['gcBias', 'gcFresh', 'gcVol', 'gcSweep', 'gcRR'].forEach(id => { $(id).textContent = '—'; });
       $('pDirGrade').style.color = '';
       $('stSignalPill').textContent = 'WAIT';
@@ -3953,8 +4387,13 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
       $('stTradePnlSub').textContent = !cs2 ? 'Auto-tracks when an R:R ≥ 1:2 setup forms'
         : cs2.momentum ? `Momentum ${csTf} ${cs2.dir} @ $${cs2.entry.toFixed(2)} · SL $${cs2.sl.toFixed(2)} beyond the zone`
         : a2.missed ? `No trade: ${csTf} setup already reached TP1 — expired`
-        : a2.distR > TRIGGER_RANGE_R ? `No trade: price is ${a2.distR.toFixed(2)}R from entry (arm limit ${TRIGGER_RANGE_R.toFixed(1)}R)`
-        : `Standing by: ${csTf} ${cs2.dir} arms within ${TRIGGER_RANGE_R.toFixed(1)}R of $${cs2.entry.toFixed(2)}`;
+        /* v4.34 tightened arming from "within 2.5R" to "at the zone" (ZONE_LIVE_R). This line kept
+           advertising 2.5R, so a setup 1.30R away read as "should already be armed" and looked
+           broken. It now quotes the rule the engine actually applies, plus the live distance. */
+        : a2.distR > ZONE_LIVE_R
+          ? `No trade: price is ${a2.distR.toFixed(2)}R from entry. It arms only at the zone — `
+            + `needs $${cs2.entry.toFixed(2)}, that is ${a2.distR.toFixed(2)}R away (limit ${ZONE_LIVE_R.toFixed(2)}R).`
+          : `Armed to trigger: ${csTf} ${cs2.dir} at $${cs2.entry.toFixed(2)} — price is inside the arm band.`;
       renderFormingNote();
 
 
@@ -3962,7 +4401,9 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
 
     renderFormingNote();
     syncPriceLines();
+    if (state.journalNeedsRender) { state.journalNeedsRender = false; renderJournalTable(); }
     refreshLiveJournalCells();
+    auditLiveNumbers();
 
     // Active Zones Sidebar List
     const tfKeys = Array.from(new Set([state.activeTF, '5m', '15m']));
@@ -4235,8 +4676,9 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
     $('btnDemandRR').addEventListener('click', () => toggleRR('demand'));
     $('btnSupplyRR').addEventListener('click', () => toggleRR('supply'));
 
-    ['setBalance', 'setRiskPct', 'setEntryMode', 'setSlBuf', 'setMinRR', 'setExtraOffset', 'setMomentum'].forEach(id => {
+    ['setBalance', 'setRiskPct', 'setEntryMode', 'setSlBuf', 'setMinRR', 'setExtraOffset', 'setMomentum', 'setTargetModel', 'setVetoR'].forEach(id => {
       $(id).addEventListener('change', () => {
+        rebaseLiveTrades();    // changing the offset moves the whole price space, levels included
         runFullAnalysis();     // apply the new config to the current candles right away
         syncAllData();         // and refresh from the feed
       });
@@ -4313,7 +4755,7 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
     const ok = await syncAllData();
     if (ok) {
       connectWS();
-      log('SMC Gold Terminal v4.34 online — build ' + BUILD_STAMP + '. Structural Swing High/Low TP & 1:2 R:R Filter active. Footer R:R dots armed.', '#10b981');
+      log('SMC Gold Terminal v4.44 online — build ' + BUILD_STAMP + '. Structural Swing High/Low TP & 1:2 R:R Filter active. Footer R:R dots armed.', '#10b981');
     }
     setInterval(calibrateSpot, 60000);
   }
