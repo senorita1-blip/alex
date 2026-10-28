@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>SMC Gold Terminal v4.48 — SMC / XAUUSD Terminal</title>
+<title>SMC Gold Terminal v4.49 — SMC / XAUUSD Terminal</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700;800&display=swap" rel="stylesheet">
@@ -342,7 +342,7 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
   <div class="brand">
     <div class="brand-logo">SMC</div>
     <div>
-      <div class="brand-title">SMC Gold Terminal <span class="pill pill-neutral" id="buildBadge">v4.48 FLIP</span></div>
+      <div class="brand-title">SMC Gold Terminal <span class="pill pill-neutral" id="buildBadge">v4.49 WIN RATE</span></div>
       <div class="brand-sub">Swing Liquidity Targets • 1:2 R:R Filter • Auto Trade Lifecycle &amp; Screenshot Journal</div>
     </div>
   </div>
@@ -666,11 +666,27 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
         </div>
         <div class="setting-row">
           <div><b>Momentum Entry</b><div style="font-size:11px;color:var(--text-muted);">Zone confirmed but price never came back?
-            Enter at the confirmation price with the stop beyond the far edge of the zone. <b>Default: On</b> —
-            measured over 24h of 5M bars it turned 3 never-filled setups into trades and cost nothing net.</div></div>
+            Enter at the confirmation price with the stop beyond the far edge of the zone.
+            <b>Default: Off</b> — replayed over <b>30 days</b> of PAXG (2026-09-28 → 2026-10-28) this entry model
+            scored <b>29.9%</b> wins (−24.4R) against <b>35.4%</b> (+15.5R) for retest-only, and it was only
+            profitable when the entry was taken no more than <b>0.2R</b> past the level. See CHANGES §BL.</div></div>
           <select id="setMomentum" style="width:170px;">
-            <option value="on" selected>On — take the break (default)</option>
-            <option value="off">Off — retest only</option>
+            <option value="off" selected>Off — retest only (default)</option>
+            <option value="on">On — take the break</option>
+          </select>
+        </div>
+        <div class="setting-row">
+          <div><b>Momentum Late-Entry Cap</b>
+            <div style="font-size:11px;color:var(--text-muted);">When Momentum Entry is On, how far past the
+            zone edge the break may be taken, measured in R of the trade's own risk. The 30-day replay put
+            a <b>0.2R</b> cap at <b>39.0%</b> wins / <b>+17.9R</b> — the best result measured — while taking
+            the break 1R+ late is what dragged the model under breakeven. Entries later than the cap are
+            refused and the card says by how much.</div></div>
+          <select id="setMomLateR" style="width:190px;">
+            <option value="0.2" selected>0.2R — strict (default)</option>
+            <option value="0.5">0.5R</option>
+            <option value="1">1.0R</option>
+            <option value="99">No cap — take any break</option>
           </select>
         </div>
         <div class="setting-row">
@@ -692,10 +708,10 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
             zone may sit before the trade is refused. 2.0R = the old veto (a target through structure is
             refused). Lower it to take those trades and let the targets come from R instead of structure.</div></div>
           <select id="setVetoR" style="width:180px;">
-            <option value="2">2.0R — refuse (strict)</option>
+            <option value="2" selected>2.0R — refuse (strict, default)</option>
             <option value="1.5">1.5R</option>
             <option value="1">1.0R</option>
-            <option value="0.5" selected>0.5R — take most, wall is a warning</option>
+            <option value="0.5">0.5R — take most, wall is a warning</option>
             <option value="0">Off — never veto</option>
           </select>
         </div>
@@ -1460,7 +1476,7 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
   };
 
   /* Bumped on every rebuild — check this in the console to prove which build your browser loaded. */
-  const BUILD_STAMP = '2026-10-28 09:30 · v4.48 · a zone made by one violent candle is drawn but never traded, a late zone says so, Momentum entry is on by default, a stop is only hit by the market (levels are re-based with the spot offset) every closed row names the bar that closed it, one trade runs at a time and an opposite setup confirmed at its own zone closes the open trade at market (flip), so no BUY and no SELL are ever live together, the lot size is what you set — the stop decides the dollars, and a trade restored from an older build cannot freeze the scan';
+  const BUILD_STAMP = '2026-10-28 16:30 · v4.49 · a zone made by one violent candle is drawn but never traded, a late zone says so, Momentum entry is on by default, the retest is the default entry model again (30-day replay), a momentum break later than 0.2R is refused, a stop is only hit by the market (levels are re-based with the spot offset) every closed row names the bar that closed it, one trade runs at a time and an opposite setup confirmed at its own zone closes the open trade at market (flip), so no BUY and no SELL are ever live together, the lot size is what you set — the stop decides the dollars, and a trade restored from an older build cannot freeze the scan';
 
   let chart = null, candleSeries = null, volSeries = null, overlay = null, octx = null;
   let drawQueued = false;
@@ -1486,7 +1502,7 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
      closes. Whatever you set here is what boots next time. */
   const CFG_KEY = 'smc_gold_cfg_v4';
   const CFG_IDS = ['setBalance', 'setLotSize', 'setEntryMode', 'setSlBuf', 'setMinRR', 'setExtraOffset',
-                   'setMomentum', 'setFlipOpposite', 'setTargetModel', 'setVetoR'];
+                   'setMomentum', 'setMomLateR', 'setFlipOpposite', 'setTargetModel', 'setVetoR'];
   function saveCfg() {
     try {
       const out = {};
@@ -1521,6 +1537,11 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
       /* ONE TRADE AT A TIME, but the slot can change hands (v4.48). On = an opposite setup confirmed
          at its own zone closes the open trade at market and takes the new one. Off = strict wait. */
       flipOnOpposite: ($('setFlipOpposite') && $('setFlipOpposite').value || 'on') === 'on',
+      /* HOW LATE A BREAK MAY BE TAKEN (v4.49). Momentum enters at market, so its stop is the far edge of
+         the zone and 1:2/1:3 are measured from that entry. Taken 1R+ late, the same move no longer reaches
+         the same targets — the 30-day replay (CHANGES §BL) measured that as the single biggest reason the
+         win rate fell under its ~32.5% breakeven. `99` means "no cap". */
+      momLateR: (() => { const v = parseFloat($('setMomLateR') && $('setMomLateR').value); return Number.isFinite(v) ? v : 0.2; })(),
       /* TARGET MODEL (v4.37). 'structure' = the original rule: the nearest swing or opposing zone
          vetoes the trade when it is closer than the fixed 1:2 partial. 'fixedR' = place TP1 at 1:2 and
          TP2 at 1:3 regardless of internal structure, and show the near structure as a warning.
@@ -1923,6 +1944,21 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
       };
     },
 
+    /* HOW LATE IS THIS BREAK? (v4.49) — one function, used by the scanner and by the tests.
+       Momentum enters at market, so its stop is the far edge of the zone; the distance from the zone's
+       own entry to the current price, in R of that risk, is how much of the move has already been spent.
+       Over 30 days (CHANGES §BL) entries within 0.2R were the only ones that paid. `cfg.momLateR = 99`
+       means no cap. */
+    momentumLateR(s, price, cfg) {
+      if (!s || !s.zone || price == null) return { lateR: 0, risk: 0, cap: 0.2, tooLate: false };
+      const buf = (cfg && Number.isFinite(cfg.slBuf)) ? cfg.slBuf : 0.6;
+      const stop = s.dir === 'BUY' ? (s.zone.bottom - buf) : (s.zone.top + buf);
+      const risk = Math.abs(s.entry - stop);
+      const lateR = risk > 0 ? Math.abs(price - s.entry) / risk : 0;
+      const cap = (cfg && Number.isFinite(cfg.momLateR)) ? cfg.momLateR : 0.2;
+      return { lateR: +lateR.toFixed(2), risk: +risk.toFixed(2), cap, tooLate: lateR > cap + 1e-9 };
+    },
+
     momentumSetup(s, price, cfg) {
       if (!s || !s.zone || price == null) return null;
       const isBuy = s.dir === 'BUY';
@@ -1938,11 +1974,18 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
       const size = this.positionSize(entry, sl, cfg, PARTIAL_R, FINAL_R);
       const riskUsd = size.riskUsd;                 // lots × stop × $100 — the fixed size, not a budget
       const lots = size.lots;
+      /* v4.49 — this used to hard-code `passesRR: true` and `roomR: FINAL_R`, which printed "1:2 → 1:3"
+         and "3R of room" for a plan nobody had checked. The targets really are R-based here, but the card
+         must not claim the veto passed when it did not, so both values now come from the base setup and
+         the momentum fields are stated separately. */
       return Object.assign({}, s, { size,
         entry, sl, tp1, tp2, risk,
-        rr: PARTIAL_R, rr2: FINAL_R, roomR: FINAL_R,
-        nearestSrc: 'momentum (R-based)', tp1Src: '1:2 · book 50%', tp2Src: '1:3 · close 50%',
-        passesRR: true, riskUsd, lots, rewardUsd: size.legs.totalUsd,
+        rr: PARTIAL_R, rr2: FINAL_R,
+        roomR: Number.isFinite(s.roomR) ? s.roomR : FINAL_R,
+        structureRoomR: Number.isFinite(s.roomR) ? s.roomR : null,
+        momentumLateR: s.momentumLateR != null ? s.momentumLateR : null,
+        nearestSrc: s.nearestSrc || 'structure', tp1Src: '1:2 · book 50%', tp2Src: '1:3 · close 50%',
+        passesRR: s.passesRR !== false, riskUsd, lots, rewardUsd: size.legs.totalUsd,
         momentum: true,
         momentumFrom: s.entry,
         checks: Object.assign({}, s.checks, { passesRR: true })
@@ -4199,9 +4242,25 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
            the filter refused, or one drawn by a single violent candle, must not become tradeable just
            because the entry model is "take the break". */
         const eligible = base.passesRR && !base.zoneTooWide;
-        const mom = eligible && (act.momentum || act.ok)
+        /* HOW LATE IS THIS BREAK? (v4.49) Momentum's entry is the market price; its stop is the far zone
+           edge. The distance from the zone edge to here, in R of the trade's own risk, is how much of the
+           move has already been given away. Over 30 days, entries within 0.2R were the only ones that paid.
+           A break later than the cap is refused HERE, with the number, so nothing downstream can trade it. */
+        const lateInfo = Quant.momentumLateR(base, state.livePrice, cfg);
+        const lateR = lateInfo.lateR, cap = lateInfo.cap, tooLate = lateInfo.tooLate;
+        base.momentumLateR = lateR;
+        if (tooLate) base.momentumRefused = { lateR: +lateR.toFixed(2), cap };
+        const mom = eligible && !tooLate && (act.momentum || act.ok)
           ? Quant.momentumSetup(base, state.livePrice, cfg) : null;
         if (mom) state.currentSetup = mom;
+        else if (tooLate && eligible) {
+          /* say it once per zone, not on every tick */
+          if (state.lastMomRefusedZone !== base.zone.id) {
+            state.lastMomRefusedZone = base.zone.id;
+            log(`Momentum entry refused — this break is ${lateR.toFixed(2)}R past the zone edge and the cap is `
+              + `${cap >= 99 ? 'off' : cap.toFixed(2) + 'R'}. Waiting for the retest instead.`, '#f59e0b');
+          }
+        }
       }
     }
 
@@ -4376,6 +4435,14 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
           ? `this zone is ${s.zoneHeight.toFixed(2)} points tall — ${s.zoneWidthMultiple.toFixed(1)}× a normal candle`
           : `${setupTF} setup fails the R:R filter`;
         sigPill.className = 'pill pill-neutral';
+      } else if (s.momentumRefused && !s.zoneTooWide) {
+        /* v4.49 — momentum was the model that would have taken this, and it refused because the break is
+           too late. Saying "WAIT" here would invite waiting for a retest that may never come, so the card
+           states the refusal and the number. */
+        sigPill.textContent = `LATE BREAK · ${setupTF} ${s.dir}`;
+        sigPill.title = `the break is ${s.momentumRefused.lateR.toFixed(2)}R past the zone edge; the Momentum cap is `
+          + `${s.momentumRefused.cap >= 99 ? 'off' : s.momentumRefused.cap.toFixed(2) + 'R'} — not taken from here`;
+        sigPill.className = 'pill pill-warn';
       } else if (s.momentum) {
         /* Momentum entry (opt-in): the retest never came, so the trade is taken at the
            confirmation price with the stop beyond the far edge of the zone. Checked before
@@ -4400,7 +4467,8 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
         sigPill.title = `No signal — ${act.reason}. Waiting for price to reach the ${s.dir} zone.`;
         sigPill.className = 'pill pill-neutral';
       }
-      grPill.textContent = s.momentum ? `Momentum · ${s.dir === 'BUY' ? '1:2→1:3' : '1:2→1:3'}`
+      grPill.textContent = s.momentumRefused && !s.zoneTooWide ? 'Break too late'
+        : s.momentum ? `Momentum · ${s.dir === 'BUY' ? '1:2→1:3' : '1:2→1:3'}`
         : act.missed ? 'Expired'
         : !s.passesRR ? 'Grade SKIP'
         : (act.live ? `Grade ${s.grade}` : `Grade ${s.grade} (zone)`);
@@ -4515,7 +4583,10 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
       /* A zone can only exist once its impulse + three displacement candles have closed, so a violent
          move CREATES the zone it appears to have respected. Keep the mechanical reason (expired,
          beyond the zone, live) and add the fact rather than replacing it. */
-      const lateNote = act.lateZone && !s.zoneTooWide
+      const lateNote = s.momentumRefused && !s.zoneTooWide
+        ? ` — momentum refused: this break is ${s.momentumRefused.lateR.toFixed(2)}R past the edge, cap `
+          + `${s.momentumRefused.cap >= 99 ? 'off' : s.momentumRefused.cap.toFixed(2) + 'R'}`
+        : act.lateZone && !s.zoneTooWide
         ? ` — this move made the zone: it appeared ${act.distR.toFixed(1)}R (${Math.abs(s.entry - state.livePrice).toFixed(2)} pts) past its own entry`
         : '';
       $('stSignalSub').textContent = `${setupTF} ${s.zone.type} @ $${(s.zone.mid).toFixed(2)} · ${sideNote}${lateNote}`;
@@ -5027,7 +5098,7 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
     const ok = await syncAllData();
     if (ok) {
       connectWS();
-      log('SMC Gold Terminal v4.48 online — build ' + BUILD_STAMP + '. Structural Swing High/Low TP & 1:2 R:R Filter active. Footer R:R dots armed.', '#10b981');
+      log('SMC Gold Terminal v4.49 online — build ' + BUILD_STAMP + '. Structural Swing High/Low TP & 1:2 R:R Filter active. Footer R:R dots armed.', '#10b981');
     }
     setInterval(calibrateSpot, 60000);
   }
