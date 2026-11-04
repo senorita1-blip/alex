@@ -4008,7 +4008,15 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
       if ([yEntry, ySL, yMin, yMax, zTop, zBot].some(v => v === null || v === undefined)) return;
       /* If any level of the projection is outside the plot, the price scale is fitted to an older
          projection. Ask for one refit — the next frame then measures the same cache and is stable. */
-      if ([yEntry, ySL, yMin, yMax, zTop, zBot].some(v => v < 0 || v > plotH)) outOfRange = true;
+      if ([yEntry, ySL, yMin, yMax, zTop, zBot].some(v => v < 0 || v > plotH)) {
+        outOfRange = true;
+        /* A diagnostic, not decoration: if a projection ever does not fit, the numbers that explain why
+           are on the console instead of being guessed at from a screenshot. */
+        console.warn('[rr] projection outside the plot', JSON.stringify({
+          side, plotH, ys: { entry: yEntry | 0, sl: ySL | 0, tpMin: yMin | 0, tpMax: yMax | 0, zTop: zTop | 0, zBot: zBot | 0 },
+          levels: { entry: m.entry, sl: m.sl, tpMin: m.tpMin, tpMax: m.tpMax }, binds: !!m.stopBinds,
+          cached: !!(state.rr.maps && state.rr.maps[side]) }));
+      }
       /* Normally impossible now that the price scale covers the projection, but if the user has
          manually dragged the scale, say so rather than drawing nothing without explanation. */
       if (yEntry < -plotH || yEntry > plotH * 2) {
