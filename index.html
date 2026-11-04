@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>SMC Gold Terminal v4.50 — SMC / XAUUSD Terminal</title>
+<title>SMC Gold Terminal v4.51 — SMC / XAUUSD Terminal</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700;800&display=swap" rel="stylesheet">
@@ -342,7 +342,7 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
   <div class="brand">
     <div class="brand-logo">SMC</div>
     <div>
-      <div class="brand-title">SMC Gold Terminal <span class="pill pill-neutral" id="buildBadge">v4.50 SETTINGS SAVE</span></div>
+      <div class="brand-title">SMC Gold Terminal <span class="pill pill-neutral" id="buildBadge">v4.51 WIDE STOP</span></div>
       <div class="brand-sub">Swing Liquidity Targets • 1:2 R:R Filter • Auto Trade Lifecycle &amp; Screenshot Journal</div>
     </div>
   </div>
@@ -725,8 +725,15 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
           </select>
         </div>
         <div class="setting-row">
-          <div><b>Stop-Loss Spread Buffer ($)</b><div style="font-size:11px;color:var(--text-muted);">Added beyond distal edge of zone</div></div>
-          <input type="number" id="setSlBuf" value="0.60" step="0.10" style="width:120px;" />
+          <div><b>Stop Buffer Beyond Zone ($)</b><div style="font-size:11px;color:var(--text-muted);">Extra distance added <i>past</i> the far edge of the
+          supply/demand zone, so a wick through the zone does not take the stop. Default 10.00.</div></div>
+          <input type="number" id="setSlBuf" value="10.00" step="0.50" min="0" style="width:120px;" />
+        </div>
+        <div class="setting-row">
+          <div><b>Minimum Stop Distance ($)</b><div style="font-size:11px;color:var(--text-muted);">Floor on the stop, measured from the entry, on every timeframe.
+          The stop is the <i>wider</i> of (zone + buffer) and this floor. 0 = no floor. Default 50.00 — a 5M/15M trade whose
+          stop is 9 points wide is inside the noise of one median 5M candle.</div></div>
+          <input type="number" id="setMinStop" value="50.00" step="1" min="0" style="width:120px;" />
         </div>
       </div>
 
@@ -1476,7 +1483,7 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
   };
 
   /* Bumped on every rebuild — check this in the console to prove which build your browser loaded. */
-  const BUILD_STAMP = '2026-11-04 04:40 · v4.50 · six number settings were saved and then silently ignored on reload (Balance, Lot Size, Stop Buffer, Min R:R, Price Offset, Momentum late cap) — they now load back, v4.49 · a zone made by one violent candle is drawn but never traded, a late zone says so, Momentum entry is on by default, the retest is the default entry model again (30-day replay), a momentum break later than 0.2R is refused, a stop is only hit by the market (levels are re-based with the spot offset) every closed row names the bar that closed it, one trade runs at a time and an opposite setup confirmed at its own zone closes the open trade at market (flip), so no BUY and no SELL are ever live together, the lot size is what you set — the stop decides the dollars, and a trade restored from an older build cannot freeze the scan';
+  const BUILD_STAMP = '2026-11-04 05:10 · v4.51 · the stop now obeys two rules instead of one: it sits 10 past the far edge of the zone (Stop Buffer, was 0.60) and it is never closer to the entry than the Minimum Stop Distance (default 50) — the wider of the two wins, and the card and journal print which one bound, v4.50 · six number settings were saved and then silently ignored on reload (Balance, Lot Size, Stop Buffer, Min R:R, Price Offset, Momentum late cap) — they now load back, v4.49 · a zone made by one violent candle is drawn but never traded, a late zone says so, Momentum entry is on by default, the retest is the default entry model again (30-day replay), a momentum break later than 0.2R is refused, a stop is only hit by the market (levels are re-based with the spot offset) every closed row names the bar that closed it, one trade runs at a time and an opposite setup confirmed at its own zone closes the open trade at market (flip), so no BUY and no SELL are ever live together, the lot size is what you set — the stop decides the dollars, and a trade restored from an older build cannot freeze the scan';
 
   let chart = null, candleSeries = null, volSeries = null, overlay = null, octx = null;
   let drawQueued = false;
@@ -1501,7 +1508,7 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
      survivable for the flip, where "Off" is a promise that nothing new is taken until the open trade
      closes. Whatever you set here is what boots next time. */
   const CFG_KEY = 'smc_gold_cfg_v4';
-  const CFG_IDS = ['setBalance', 'setLotSize', 'setEntryMode', 'setSlBuf', 'setMinRR', 'setExtraOffset',
+  const CFG_IDS = ['setBalance', 'setLotSize', 'setEntryMode', 'setSlBuf', 'setMinStop', 'setMinRR', 'setExtraOffset',
                    'setMomentum', 'setMomLateR', 'setFlipOpposite', 'setTargetModel', 'setVetoR'];
   function saveCfg() {
     try {
@@ -1538,7 +1545,14 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
       balance: parseFloat($('setBalance').value) || 10000,
       lotSize: Math.max(0.01, parseFloat($('setLotSize').value) || 0.10),
       entryMode: $('setEntryMode').value || 'edge',
-      slBuf: parseFloat($('setSlBuf').value) || 0.60,
+      /* v4.51 — STOP GEOMETRY IS TWO NUMBERS, NOT ONE.
+         `slBuf` is how far PAST the far edge of the zone the stop sits, so a wick through the zone does
+         not take it. `minStopPts` is a floor on the whole stop distance measured from the entry: on a 5M
+         supply whose band is 2 points tall, zone + 10 gives a 12-point stop, which is still inside the
+         noise of one median 5M candle (2.7 points) unless the floor says otherwise. The stop is the
+         WIDER of the two. Defaults are the user's own model: 10 past the zone, never closer than 50. */
+      slBuf: (() => { const v = parseFloat($('setSlBuf').value); return Number.isFinite(v) ? v : 10; })(),
+      minStopPts: (() => { const v = parseFloat($('setMinStop') && $('setMinStop').value); return Number.isFinite(v) ? v : 50; })(),
       minRR: parseFloat($('setMinRR').value) || 2.0,
       extraOffset: parseFloat($('setExtraOffset').value) || 0,
       // Momentum entry is OPT-IN. Off = the original behaviour: wait for price to retest the zone.
@@ -1752,12 +1766,32 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
       return { height: h, median: med, bound, tooWide: h > bound, multiple: med > 0 ? h / med : 0 };
     },
 
+    /* STOP PLACEMENT (v4.51) — one place, used by the retest model and by the momentum model.
+         base  = far edge of the zone ± the buffer   (the stop is never inside the zone)
+         floor = entry ∓ the minimum stop distance   (a floor on the whole stop, every timeframe)
+       The stop is the WIDER of the two, so it always satisfies both rules at once. `binds` says which
+       one won, so the card and the journal can print the arithmetic instead of a bare number. */
+    placeStop(entry, isBuy, zone, cfg) {
+      const buf = Number.isFinite(cfg.slBuf) ? cfg.slBuf : 10;
+      const floorPts = Number.isFinite(cfg.minStopPts) ? Math.max(0, cfg.minStopPts) : 0;
+      const base = isBuy ? (zone.bottom - buf) : (zone.top + buf);
+      const floor = isBuy ? (entry - floorPts) : (entry + floorPts);
+      const binds = floorPts > 0 && (isBuy ? floor < base : floor > base);
+      return { sl: binds ? floor : base, base, floor, buf, floorPts, binds };
+    },
+
     buildSwingSetup(zone, allZones, swings, bias4h, bias1h, cfg) {
       if (!zone || zone.broken) return null;
+      /* A MALFORMED ZONE IS NOT A PLAN (v4.51). `top` must be above `bottom` for supply and demand alike.
+         Before the stop floor existed, an inverted fixture happened to produce a stop on the wrong side and
+         was refused by accident; with a 50-point floor the wider stop can straddle the band and manufacture
+         a geometrically valid SELL out of nonsense. Refuse the shape explicitly instead. */
+      if (!(Number.isFinite(zone.top) && Number.isFinite(zone.bottom) && zone.top > zone.bottom)) return null;
       const isBuy = zone.type === 'demand';
       const dir = isBuy ? 'BUY' : 'SELL';
       const entry = cfg.entryMode === 'mid' ? zone.mid : (isBuy ? zone.top : zone.bottom);
-      const sl = isBuy ? (zone.bottom - cfg.slBuf) : (zone.top + cfg.slBuf);
+      const stop = this.placeStop(entry, isBuy, zone, cfg);
+      const sl = stop.sl;
       const risk = Math.abs(entry - sl);
       if (risk <= 0.05) return null;
 
@@ -1900,6 +1934,8 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
         tp1Src: tp1Obj.src, tp2Src: tp2Obj.src,
         risk, rr, rr2, roomR, nearestSrc, nearestPrice, nextRoomR, nextSrc, passesRR, roomShortOfPartial, roomShortOfRunner,
         fixedR, structureInsideTargets, targetsRBased, againstStructure, vetoR,
+        stopBase: Number(stop.base.toFixed(2)), stopFloor: Number(stop.floor.toFixed(2)),
+        stopFloorBinds: !!stop.binds, stopBuf: stop.buf, stopFloorPts: stop.floorPts,
         zoneTooWide: width.tooWide, zoneHeight: Number(width.height.toFixed(2)),
         zoneMedianRange: Number(width.median.toFixed(2)), zoneWidthBound: Number(width.bound.toFixed(2)),
         zoneWidthMultiple: Number(width.multiple.toFixed(1)),
@@ -1960,9 +1996,11 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
        means no cap. */
     momentumLateR(s, price, cfg) {
       if (!s || !s.zone || price == null) return { lateR: 0, risk: 0, cap: 0.2, tooLate: false };
-      const buf = (cfg && Number.isFinite(cfg.slBuf)) ? cfg.slBuf : 0.6;
-      const stop = s.dir === 'BUY' ? (s.zone.bottom - buf) : (s.zone.top + buf);
-      const risk = Math.abs(s.entry - stop);
+      /* v4.51 — same stop geometry as the plan itself (`placeStop`): zone + buffer, or the minimum-stop
+         floor, whichever is wider. Measuring lateness against a stop the engine would never place made
+         "R past the edge" a made-up number once the floor was introduced. */
+      const stop = this.placeStop(s.entry, s.dir === 'BUY', s.zone, cfg || {});
+      const risk = Math.abs(s.entry - stop.sl);
       const lateR = risk > 0 ? Math.abs(price - s.entry) / risk : 0;
       const cap = (cfg && Number.isFinite(cfg.momLateR)) ? cfg.momLateR : 0.2;
       return { lateR: +lateR.toFixed(2), risk: +risk.toFixed(2), cap, tooLate: lateR > cap + 1e-9 };
@@ -1972,8 +2010,9 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
       if (!s || !s.zone || price == null) return null;
       const isBuy = s.dir === 'BUY';
       const zone = s.zone;
-      const sl = isBuy ? (zone.bottom - cfg.slBuf) : (zone.top + cfg.slBuf);
       const entry = price;
+      const stop = this.placeStop(entry, isBuy, zone, cfg);
+      const sl = stop.sl;
       const risk = Math.abs(entry - sl);
       if (!(risk > 0.05)) return null;
       if (isBuy ? entry <= sl : entry >= sl) return null;      // stop is on the wrong side
@@ -2533,6 +2572,11 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
     if (Number.isFinite(s.roomR)) {
       parts.push(s.roomR >= 50 ? 'open air to the target'
         : `${Number(s.roomR).toFixed(2)}R of room to ${s.nearestSrc || 'structure'}`);
+    }
+    if (Number.isFinite(s.risk)) {
+      parts.push(s.stopFloorBinds
+        ? `stop ${num2(s.risk)} pts = ${s.stopFloorPts} floor (zone ${num2(s.zoneHeight)} + ${num2(s.stopBuf)} buffer sits closer)`
+        : `stop ${num2(s.risk)} pts = zone ${num2(s.zoneHeight)} + ${num2(s.stopBuf)} buffer`);
     }
     parts.push(`plan: 50% @ 1:2 → 50% @ 1:${Number(s.rr2 || s.rr || 3).toFixed(2)}`);
     if (sessionShort) parts.push(`${sessionShort} session`);
@@ -5107,7 +5151,7 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
     const ok = await syncAllData();
     if (ok) {
       connectWS();
-      log('SMC Gold Terminal v4.50 online — build ' + BUILD_STAMP + '. Structural Swing High/Low TP & 1:2 R:R Filter active. Footer R:R dots armed.', '#10b981');
+      log('SMC Gold Terminal v4.51 online — build ' + BUILD_STAMP + '. Structural Swing High/Low TP & 1:2 R:R Filter active. Footer R:R dots armed.', '#10b981');
     }
     setInterval(calibrateSpot, 60000);
   }
