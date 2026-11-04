@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>SMC Gold Terminal v4.49 — SMC / XAUUSD Terminal</title>
+<title>SMC Gold Terminal v4.50 — SMC / XAUUSD Terminal</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700;800&display=swap" rel="stylesheet">
@@ -342,7 +342,7 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
   <div class="brand">
     <div class="brand-logo">SMC</div>
     <div>
-      <div class="brand-title">SMC Gold Terminal <span class="pill pill-neutral" id="buildBadge">v4.49 WIN RATE</span></div>
+      <div class="brand-title">SMC Gold Terminal <span class="pill pill-neutral" id="buildBadge">v4.50 SETTINGS SAVE</span></div>
       <div class="brand-sub">Swing Liquidity Targets • 1:2 R:R Filter • Auto Trade Lifecycle &amp; Screenshot Journal</div>
     </div>
   </div>
@@ -1476,7 +1476,7 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
   };
 
   /* Bumped on every rebuild — check this in the console to prove which build your browser loaded. */
-  const BUILD_STAMP = '2026-10-28 16:30 · v4.49 · a zone made by one violent candle is drawn but never traded, a late zone says so, Momentum entry is on by default, the retest is the default entry model again (30-day replay), a momentum break later than 0.2R is refused, a stop is only hit by the market (levels are re-based with the spot offset) every closed row names the bar that closed it, one trade runs at a time and an opposite setup confirmed at its own zone closes the open trade at market (flip), so no BUY and no SELL are ever live together, the lot size is what you set — the stop decides the dollars, and a trade restored from an older build cannot freeze the scan';
+  const BUILD_STAMP = '2026-11-04 04:40 · v4.50 · six number settings were saved and then silently ignored on reload (Balance, Lot Size, Stop Buffer, Min R:R, Price Offset, Momentum late cap) — they now load back, v4.49 · a zone made by one violent candle is drawn but never traded, a late zone says so, Momentum entry is on by default, the retest is the default entry model again (30-day replay), a momentum break later than 0.2R is refused, a stop is only hit by the market (levels are re-based with the spot offset) every closed row names the bar that closed it, one trade runs at a time and an opposite setup confirmed at its own zone closes the open trade at market (flip), so no BUY and no SELL are ever live together, the lot size is what you set — the stop decides the dollars, and a trade restored from an older build cannot freeze the scan';
 
   let chart = null, candleSeries = null, volSeries = null, overlay = null, octx = null;
   let drawQueued = false;
@@ -1517,9 +1517,18 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
       const saved = JSON.parse(raw);
       CFG_IDS.forEach(id => {
         const el = $(id);
-        if (el && saved[id] != null && [...el.options || []].some(o => o.value === String(saved[id]))) {
-          el.value = String(saved[id]);
-        }
+        if (!el || saved[id] == null) return;
+        /* v4.50 BUG FIX — every NUMBER setting was silently thrown away on reload.
+           The old guard only wrote the value back when it matched one of the element's <option>s,
+           which is true for a <select> and impossible for an <input type="number"> (its .options is
+           undefined). So Balance, Lot Size, Stop Buffer, Min R:R and Price Offset were saved to
+           localStorage on every change and then ignored at boot — the user set a Stop Buffer of 3.00,
+           the page reloaded, and the engine was back to 0.60 without saying so. */
+        const isSelect = el.tagName === 'SELECT';
+        const okValue = isSelect
+          ? [...(el.options || [])].some(o => o.value === String(saved[id]))
+          : Number.isFinite(parseFloat(saved[id]));
+        if (okValue) el.value = String(saved[id]);
       });
     } catch (e) {}
   }
@@ -5098,7 +5107,7 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
     const ok = await syncAllData();
     if (ok) {
       connectWS();
-      log('SMC Gold Terminal v4.49 online — build ' + BUILD_STAMP + '. Structural Swing High/Low TP & 1:2 R:R Filter active. Footer R:R dots armed.', '#10b981');
+      log('SMC Gold Terminal v4.50 online — build ' + BUILD_STAMP + '. Structural Swing High/Low TP & 1:2 R:R Filter active. Footer R:R dots armed.', '#10b981');
     }
     setInterval(calibrateSpot, 60000);
   }
