@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>SMC Gold Terminal v4.52 — SMC / XAUUSD Terminal</title>
+<title>SMC Gold Terminal v4.53 — SMC / XAUUSD Terminal</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700;800&display=swap" rel="stylesheet">
@@ -342,7 +342,7 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
   <div class="brand">
     <div class="brand-logo">SMC</div>
     <div>
-      <div class="brand-title">SMC Gold Terminal <span class="pill pill-neutral" id="buildBadge">v4.52 MAP FITS STOP</span></div>
+      <div class="brand-title">SMC Gold Terminal <span class="pill pill-neutral" id="buildBadge">v4.53 MAP REFIT</span></div>
       <div class="brand-sub">Swing Liquidity Targets • 1:2 R:R Filter • Auto Trade Lifecycle &amp; Screenshot Journal</div>
     </div>
   </div>
@@ -1483,7 +1483,7 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
   };
 
   /* Bumped on every rebuild — check this in the console to prove which build your browser loaded. */
-  const BUILD_STAMP = '2026-11-04 06:20 · v4.52 · the R:R map now draws the stop the engine would place (zone + buffer, or the minimum-stop floor, whichever is wider) and the price scale is fitted to the map the overlay is actually drawing, so a stop 10+ points past the zone can no longer hang off the plot, v4.51 · the stop now obeys two rules instead of one: it sits 10 past the far edge of the zone (Stop Buffer, was 0.60) and it is never closer to the entry than the Minimum Stop Distance (default 50) — the wider of the two wins, and the card and journal print which one bound, v4.50 · six number settings were saved and then silently ignored on reload (Balance, Lot Size, Stop Buffer, Min R:R, Price Offset, Momentum late cap) — they now load back, v4.49 · a zone made by one violent candle is drawn but never traded, a late zone says so, Momentum entry is on by default, the retest is the default entry model again (30-day replay), a momentum break later than 0.2R is refused, a stop is only hit by the market (levels are re-based with the spot offset) every closed row names the bar that closed it, one trade runs at a time and an opposite setup confirmed at its own zone closes the open trade at market (flip), so no BUY and no SELL are ever live together, the lot size is what you set — the stop decides the dollars, and a trade restored from an older build cannot freeze the scan';
+  const BUILD_STAMP = '2026-11-04 06:35 · v4.53 · the R:R price scale is re-fitted by forcing autoscale off for one frame (setting autoScale:true when it is already true is a no-op, which is why a projection with a wide stop could keep an axis that cut its own stop off), v4.52 · the R:R map now draws the stop the engine would place (zone + buffer, or the minimum-stop floor, whichever is wider) and the price scale is fitted to the map the overlay is actually drawing, so a stop 10+ points past the zone can no longer hang off the plot, v4.51 · the stop now obeys two rules instead of one: it sits 10 past the far edge of the zone (Stop Buffer, was 0.60) and it is never closer to the entry than the Minimum Stop Distance (default 50) — the wider of the two wins, and the card and journal print which one bound, v4.50 · six number settings were saved and then silently ignored on reload (Balance, Lot Size, Stop Buffer, Min R:R, Price Offset, Momentum late cap) — they now load back, v4.49 · a zone made by one violent candle is drawn but never traded, a late zone says so, Momentum entry is on by default, the retest is the default entry model again (30-day replay), a momentum break later than 0.2R is refused, a stop is only hit by the market (levels are re-based with the spot offset) every closed row names the bar that closed it, one trade runs at a time and an opposite setup confirmed at its own zone closes the open trade at market (flip), so no BUY and no SELL are ever live together, the lot size is what you set — the stop decides the dollars, and a trade restored from an older build cannot freeze the scan';
 
   let chart = null, candleSeries = null, volSeries = null, overlay = null, octx = null;
   let drawQueued = false;
@@ -4021,8 +4021,20 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
 
       maps.push({ side, m, xS, yEntry, ySL, yMin, yMax, zTop, zBot });
     });
-    if (outOfRange && state.rr.maps) {
-      try { candleSeries.priceScale().applyOptions({ autoScale: true }); } catch (e) {}
+    /* REFIT (v4.53). `applyOptions({ autoScale: true })` is a no-op when autoScale is ALREADY true, so the
+       scale kept the range it had fitted to an older projection while the overlay drew a newer one — the
+       "stop hangs 30 points below the axis" report at 1280px. Force the invalidation by switching autoscale
+       off for one frame and back on, with a per-map guard so it cannot spin. */
+    if (outOfRange && state.rr.maps && !state.rr.refitting && Date.now() - (state.rr.refitAt || 0) > 250) {
+      state.rr.refitting = true; state.rr.refitAt = Date.now();
+      try {
+        candleSeries.priceScale().applyOptions({ autoScale: false });
+        requestAnimationFrame(() => {
+          try { candleSeries.priceScale().applyOptions({ autoScale: true }); } catch (e) {}
+          state.rr.refitting = false;
+          queueOverlayDraw();
+        });
+      } catch (e) { state.rr.refitting = false; }
     }
     if (!maps.length) return;
 
@@ -4163,7 +4175,11 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
       state.rr.warned = false;
       if (btn) btn.classList.add('on');
       rrEnsureRoom(true);
-      try { candleSeries.priceScale().applyOptions({ autoScale: true }); } catch (e) {}
+      state.rr.refitAt = 0;
+      try {
+        candleSeries.priceScale().applyOptions({ autoScale: false });
+        requestAnimationFrame(() => { try { candleSeries.priceScale().applyOptions({ autoScale: true }); } catch (e) {} queueOverlayDraw(); });
+      } catch (e) {}
       log(`${label} R:R map ON — ${m.tf.toUpperCase()} zone | entry $${m.entry.toFixed(2)} | SL $${m.sl.toFixed(2)} ` +
           `| min 1:2 $${m.tpMin.toFixed(2)} → max 1:3 $${m.tpMax.toFixed(2)}`, color);
     } else {
@@ -4173,8 +4189,11 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
       if (!state.rr.demand && !state.rr.supply) {
         state.rr.maps = null;                 // the price scale must fall back to the candles
         rrEnsureRoom(false);
-        // back to the normal candle view as soon as the last map is switched off
-        try { candleSeries.priceScale().applyOptions({ autoScale: true }); } catch (e) {}
+        // back to the normal candle view as soon as the last map is switched off (same off/on nudge)
+        try {
+          candleSeries.priceScale().applyOptions({ autoScale: false });
+          requestAnimationFrame(() => { try { candleSeries.priceScale().applyOptions({ autoScale: true }); } catch (e) {} queueOverlayDraw(); });
+        } catch (e) {}
       }
       log(`${label} R:R map OFF — overlay removed.`);
     }
@@ -5173,7 +5192,7 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
     const ok = await syncAllData();
     if (ok) {
       connectWS();
-      log('SMC Gold Terminal v4.52 online — build ' + BUILD_STAMP + '. Structural Swing High/Low TP & 1:2 R:R Filter active. Footer R:R dots armed.', '#10b981');
+      log('SMC Gold Terminal v4.53 online — build ' + BUILD_STAMP + '. Structural Swing High/Low TP & 1:2 R:R Filter active. Footer R:R dots armed.', '#10b981');
     }
     setInterval(calibrateSpot, 60000);
   }
