@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>SMC Gold Terminal v4.53 — SMC / XAUUSD Terminal</title>
+<title>SMC Gold Terminal v4.55 — SMC / XAUUSD Terminal</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700;800&display=swap" rel="stylesheet">
@@ -342,7 +342,7 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
   <div class="brand">
     <div class="brand-logo">SMC</div>
     <div>
-      <div class="brand-title">SMC Gold Terminal <span class="pill pill-neutral" id="buildBadge">v4.53 MAP REFIT</span></div>
+      <div class="brand-title">SMC Gold Terminal <span class="pill pill-neutral" id="buildBadge">v4.55 OFFSET FIX</span></div>
       <div class="brand-sub">Swing Liquidity Targets • 1:2 R:R Filter • Auto Trade Lifecycle &amp; Screenshot Journal</div>
     </div>
   </div>
@@ -1455,6 +1455,10 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
 
   const state = {
     candles: { '4h': [], '1h': [], '15m': [], '5m': [] },
+    /* The offset in which EACH timeframe's candles are currently expressed. Spot/PAXG calibration
+       moves independently of REST refreshes; without this, old candles keep offset A while the next
+       websocket tick and live trade use offset B (the image-12 +8.38 / +7.13 mismatch). */
+    candleOffsets: { '4h': null, '1h': null, '15m': null, '5m': null },
     analysis: { '4h': null, '1h': null, '15m': null, '5m': null },
     bias4h: { bias: 'NEUTRAL', ema50: 0, hh: false, ll: false },
     bias1h: { bias: 'NEUTRAL', ema50: 0, hh: false, ll: false },
@@ -1483,7 +1487,7 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
   };
 
   /* Bumped on every rebuild — check this in the console to prove which build your browser loaded. */
-  const BUILD_STAMP = '2026-11-04 06:35 · v4.53 · the R:R price scale is re-fitted by forcing autoscale off for one frame (setting autoScale:true when it is already true is a no-op, which is why a projection with a wide stop could keep an axis that cut its own stop off), v4.52 · the R:R map now draws the stop the engine would place (zone + buffer, or the minimum-stop floor, whichever is wider) and the price scale is fitted to the map the overlay is actually drawing, so a stop 10+ points past the zone can no longer hang off the plot, v4.51 · the stop now obeys two rules instead of one: it sits 10 past the far edge of the zone (Stop Buffer, was 0.60) and it is never closer to the entry than the Minimum Stop Distance (default 50) — the wider of the two wins, and the card and journal print which one bound, v4.50 · six number settings were saved and then silently ignored on reload (Balance, Lot Size, Stop Buffer, Min R:R, Price Offset, Momentum late cap) — they now load back, v4.49 · a zone made by one violent candle is drawn but never traded, a late zone says so, Momentum entry is on by default, the retest is the default entry model again (30-day replay), a momentum break later than 0.2R is refused, a stop is only hit by the market (levels are re-based with the spot offset) every closed row names the bar that closed it, one trade runs at a time and an opposite setup confirmed at its own zone closes the open trade at market (flip), so no BUY and no SELL are ever live together, the lot size is what you set — the stop decides the dollars, and a trade restored from an older build cannot freeze the scan';
+  const BUILD_STAMP = '2026-11-05 17:37 · v4.55 · every timeframe records its candle offset and recalibration rebases all candles plus live entry/SL/TP levels together before analysis, so the banner, zones and next tick cannot mix two price spaces; journal history and all strategy rules are unchanged, v4.54 · labels now distinguish a filtered candidate, the 0.5R arming band, and a real order: a SKIP says no order armed, and an in-range candidate quotes its distance plus the entry touch still required — trading rules, the 50-point stop floor, and the 10-point zone buffer are unchanged, v4.53 · the R:R price scale is re-fitted by forcing autoscale off for one frame (setting autoScale:true when it is already true is a no-op, which is why a projection with a wide stop could keep an axis that cut its own stop off), v4.52 · the R:R map now draws the stop the engine would place (zone + buffer, or the minimum-stop floor, whichever is wider) and the price scale is fitted to the map the overlay is actually drawing, so a stop 10+ points past the zone can no longer hang off the plot, v4.51 · the stop now obeys two rules instead of one: it sits 10 past the far edge of the zone (Stop Buffer, was 0.60) and it is never closer to the entry than the Minimum Stop Distance (default 50) — the wider of the two wins, and the card and journal print which one bound, v4.50 · six number settings were saved and then silently ignored on reload (Balance, Lot Size, Stop Buffer, Min R:R, Price Offset, Momentum late cap) — they now load back, v4.49 · a zone made by one violent candle is drawn but never traded, a late zone says so, Momentum entry is on by default, the retest is the default entry model again (30-day replay), a momentum break later than 0.2R is refused, a stop is only hit by the market (levels are re-based with the spot offset) every closed row names the bar that closed it, one trade runs at a time and an opposite setup confirmed at its own zone closes the open trade at market (flip), so no BUY and no SELL are ever live together, the lot size is what you set — the stop decides the dollars, and a trade restored from an older build cannot freeze the scan';
 
   let chart = null, candleSeries = null, volSeries = null, overlay = null, octx = null;
   let drawQueued = false;
@@ -2302,17 +2306,40 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
   const pendingTtl = tf => Math.max(3 * 60 * 60 * 1000, 12 * (TF_SECONDS[tf] || 300) * 1000);
 
   /* ---------------- PRICE SPACE ----------------
-     The charted series is PAXG + (spot − PAXG). That offset is re-calibrated every 60 s and can move
-     by a couple of dollars inside one trade. The candles are re-based when that happens (a re-fetch
-     adds the NEW offset to every bar) but a live trade's entry/SL/TP were frozen in the OLD space — so
-     a 2.8-point stop could be "hit" by the offset moving, on a chart where price never traded there.
-     Every tracked level therefore carries the offset it was measured in, and is re-based with the
-     series whenever that offset changes. */
+     The charted series is PAXG + (spot − PAXG). Calibration runs every 60 s, independently of REST
+     refreshes. Before v4.55 it changed the offset used by the NEXT tick and by rebaseLiveTrades, but
+     left the stored candles in the old space: the banner could say +7.13 while zones still used +8.38.
+     That is not a cosmetic issue — entry distance, zone touches and SL/TP ticks can all be distorted.
+
+     The legacy function name is kept for the test/API surface, but it now rebases the WHOLE price space:
+       1. every stored candle, timeframe by timeframe, from its own recorded offset;
+       2. every live trade's entry/SL/TP/zone levels by the same market delta;
+       3. only then the chart and analysis, so lifecycle evaluation never sees mixed spaces.
+     Closed journal rows are history and are NEVER rewritten. */
   function currentOffset() { return (state.spotOffset || 0) + getCfg().extraOffset; }
 
   function rebaseLiveTrades() {
     const now = currentOffset();
-    let moved = 0;
+    let moved = 0, barsMoved = 0, activeDelta = 0;
+    if (!state.candleOffsets) state.candleOffsets = { '4h': null, '1h': null, '15m': null, '5m': null };
+
+    /* Candles first, but do NOT run the lifecycle until live levels have made the same move. A null
+       offset means "already current" for synthetic/restored arrays; initial sync records the real value. */
+    ['4h', '1h', '15m', '5m'].forEach(tf => {
+      const arr = state.candles[tf] || [];
+      const previous = Number.isFinite(state.candleOffsets[tf]) ? state.candleOffsets[tf] : now;
+      const d = +(now - previous).toFixed(2);
+      if (Math.abs(d) >= 0.005) {
+        arr.forEach(c => {
+          if (![c.open, c.high, c.low, c.close].every(Number.isFinite)) return;
+          c.open += d; c.high += d; c.low += d; c.close += d; barsMoved++;
+        });
+        if (tf === state.activeTF) activeDelta = d;
+      }
+      state.candleOffsets[tf] = now;
+    });
+    if (Math.abs(activeDelta) >= 0.005 && Number.isFinite(state.livePrice)) state.livePrice += activeDelta;
+
     state.liveTrades.forEach(tr => {
       if (!Number.isFinite(tr.offsetAtArm)) { tr.offsetAtArm = now; return; }
       const d = +(now - tr.offsetAtArm).toFixed(2);
@@ -2323,11 +2350,16 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
       tr.offsetAtArm = now;
       moved++;
     });
-    if (moved) {
+    if (moved) { persistActiveTrade(); syncPrimaryTrade(); }
+
+    if (barsMoved) {
+      if (state.rr) state.rr.maps = { supply: null, demand: null };
+      renderChartSeries();
+      runFullAnalysis();
+    }
+    if (moved || barsMoved) {
       log(`[PRICE SPACE] spot/PAXG offset moved to ${now >= 0 ? '+' : ''}${now.toFixed(2)} — `
-        + `${moved} live level set(s) re-based with the candles so a stop is only hit by the market.`, '#f59e0b');
-      persistActiveTrade();
-      syncPrimaryTrade();
+        + `${barsMoved} candles and ${moved} live level set(s) re-based together; journal history unchanged.`, '#f59e0b');
     }
     return moved;
   }
@@ -4265,7 +4297,11 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
       log('ERROR: live data feed unreachable — check your connection or open this file outside a sandboxed frame.', '#ef4444');
       return false;
     }
-    ['4h', '1h', '15m', '5m'].forEach((tf, i) => { if (res[i]) state.candles[tf] = res[i]; });
+    ['4h', '1h', '15m', '5m'].forEach((tf, i) => {
+      if (!res[i]) return;
+      state.candles[tf] = res[i];
+      state.candleOffsets[tf] = currentOffset();   // these bytes were fetched in THIS price space
+    });
     state.restConnected = true;
     $('chartLoader').style.display = 'none';
     renderChartSeries();
@@ -4675,8 +4711,16 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
         ? `zone is ${s.zoneHeight.toFixed(2)} pts tall (${s.zoneWidthMultiple.toFixed(1)}× a normal candle) — drawn, not tradeable`
         : s.momentum
         ? `no retest — break entry at $${s.entry.toFixed(2)}, stop beyond the zone at $${s.sl.toFixed(2)}`
+        /* v4.54: a filtered candidate is not an armed order, and the 0.5R arming band is not the
+           entry price. The old text said "price at entry · take the SELL" while the same card said
+           SKIP and no order existed. State the block first; for a qualified plan, quote the actual
+           distance and the price at which a fill is still required. */
+        : !s.passesRR
+        ? `${s.dir} blocked by R:R / structure (${s.roomR.toFixed(2)}R room) · no order armed · entry would be $${s.entry.toFixed(2)}`
         : act.live
-        ? (act.inZone ? `price inside the zone · ${s.dir} entry live` : `price at entry · take the ${s.dir}`)
+        ? (act.inZone
+            ? `price inside the zone · ${s.dir} entry live`
+            : `inside the arm band · ${act.distR.toFixed(2)}R from entry · fill only at $${s.entry.toFixed(2)}`)
         : (act.missed
             ? `price already ran past TP1 $${s.tp1.toFixed(2)} — setup expired, no fill possible`
             : act.beyondZone
@@ -4810,6 +4854,12 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
       const csTf = cs2 ? String((cs2.zone && cs2.zone.tf) || state.activeTF).toUpperCase() : '';
       $('stTradePnlSub').textContent = !cs2 ? 'Auto-tracks when an R:R ≥ 1:2 setup forms'
         : cs2.momentum ? `Momentum ${csTf} ${cs2.dir} @ $${cs2.entry.toFixed(2)} · SL $${cs2.sl.toFixed(2)} beyond the zone`
+        /* v4.54: `currentSetup` is a candidate, not proof of an order. A SKIP inside the 0.5R band
+           used to read "Armed to trigger" even though evaluateTradeLifecycle had refused it. If a
+           real order exists it is rendered by the `tr` branch above; this branch must only describe
+           the candidate and the entry touch still required. */
+        : !cs2.passesRR
+          ? `No trade: ${csTf} ${cs2.dir} blocked by ${cs2.zoneTooWide ? 'the zone-width rule' : 'R:R / structure'} — no order armed.`
         : a2.missed ? `No trade: ${csTf} setup already reached TP1 — expired`
         /* v4.34 tightened arming from "within 2.5R" to "at the zone" (ZONE_LIVE_R). This line kept
            advertising 2.5R, so a setup 1.30R away read as "should already be armed" and looked
@@ -4817,7 +4867,9 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
         : a2.distR > ZONE_LIVE_R
           ? `No trade: price is ${a2.distR.toFixed(2)}R from entry. It arms only at the zone — `
             + `needs $${cs2.entry.toFixed(2)}, that is ${a2.distR.toFixed(2)}R away (limit ${ZONE_LIVE_R.toFixed(2)}R).`
-          : `Armed to trigger: ${csTf} ${cs2.dir} at $${cs2.entry.toFixed(2)} — price is inside the arm band.`;
+          : a2.inZone
+            ? `At the zone: ${csTf} ${cs2.dir} · entry $${cs2.entry.toFixed(2)} — waiting for the fill tick.`
+            : `Inside arm band: ${csTf} ${cs2.dir} · ${a2.distR.toFixed(2)}R from entry — fill only at $${cs2.entry.toFixed(2)}.`;
       renderFormingNote();
 
 
@@ -5200,7 +5252,7 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
     const ok = await syncAllData();
     if (ok) {
       connectWS();
-      log('SMC Gold Terminal v4.53 online — build ' + BUILD_STAMP + '. Structural Swing High/Low TP & 1:2 R:R Filter active. Footer R:R dots armed.', '#10b981');
+      log('SMC Gold Terminal v4.55 online — build ' + BUILD_STAMP + '. Structural Swing High/Low TP & 1:2 R:R Filter active. Footer R:R dots armed.', '#10b981');
     }
     setInterval(calibrateSpot, 60000);
   }
