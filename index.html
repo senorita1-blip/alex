@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>SMC Gold Terminal v4.56 — SMC / XAUUSD Terminal</title>
+<title>SMC Gold Terminal v4.57 — SMC / XAUUSD Terminal</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700;800&display=swap" rel="stylesheet">
@@ -342,7 +342,7 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
   <div class="brand">
     <div class="brand-logo">SMC</div>
     <div>
-      <div class="brand-title">SMC Gold Terminal <span class="pill pill-neutral" id="buildBadge">v4.56 RUNNER</span></div>
+      <div class="brand-title">SMC Gold Terminal <span class="pill pill-neutral" id="buildBadge">v4.57 6-DAY DATA</span></div>
       <div class="brand-sub">Swing Liquidity Targets • 1:2 R:R Filter • Auto Trade Lifecycle &amp; Screenshot Journal</div>
     </div>
   </div>
@@ -359,7 +359,7 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
       <span class="status-dot" id="connDot"></span>
       <span id="connText">Connecting…</span>
     </div>
-    <button class="btn" id="btnBacktest" title="Replay strategy across loaded historical candles">▶ Run Backtest (300 Bars)</button>
+    <button class="btn" id="btnBacktest" title="Replay strategy across the loaded 6-day 5M/15M execution history">▶ Run Backtest · loading history</button>
     <button class="btn btn-primary" id="btnSync">↻ Sync Live</button>
   </div>
 </header>
@@ -1443,6 +1443,19 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
   'use strict';
 
   const TF_SEC = { '4h': 14400, '1h': 3600, '15m': 900, '5m': 300 };
+  /* The backtest target is a genuine calendar window, not a vague 300-bar label. 5M and 15M are the
+     execution timeframes; HTF series keep 300 bars because they supply bias/structure, not execution. */
+  const BACKTEST_HISTORY_DAYS = 6;
+  const HISTORY_BARS = (() => {
+    const days = Math.max(1, Number(BACKTEST_HISTORY_DAYS) || 1);
+    return {
+      '5m': Math.max(300, Math.round(days * 86400 / TF_SEC['5m'])),
+      '15m': Math.max(300, Math.round(days * 86400 / TF_SEC['15m'])),
+      '1h': 300,
+      '4h': 300
+    };
+  })();
+  const historyCap = tf => Math.max(350, (HISTORY_BARS[tf] || 300) + 50);
   const REST_KLINES = 'https://data-api.binance.vision/api/v3/klines';
   const WS_STREAM = 'wss://data-stream.binance.vision/stream?streams=paxgusdt@kline_4h/paxgusdt@kline_1h/paxgusdt@kline_15m/paxgusdt@kline_5m';
   const SPOT_URL = 'https://api.gold-api.com/price/XAU';
@@ -1487,7 +1500,7 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
   };
 
   /* Bumped on every rebuild — check this in the console to prove which build your browser loaded. */
-  const BUILD_STAMP = '2026-11-06 · v4.56 · 1R leaves the original stop untouched, 2R books 50%, and 3R closes the runner unless opposing structure is at least 5R away; an extended runner trails to 3R at 4R, 4R at 5R, and one R behind each later full-R milestone, with initial risk preserved across trailing, reloads and P/L, v4.55 · every timeframe records its candle offset and recalibration rebases all candles plus live entry/SL/TP levels together before analysis, so the banner, zones and next tick cannot mix two price spaces; journal history and all strategy rules are unchanged, v4.54 · labels now distinguish a filtered candidate, the 0.5R arming band, and a real order: a SKIP says no order armed, and an in-range candidate quotes its distance plus the entry touch still required — trading rules, the 50-point stop floor, and the 10-point zone buffer are unchanged, v4.53 · the R:R price scale is re-fitted by forcing autoscale off for one frame (setting autoScale:true when it is already true is a no-op, which is why a projection with a wide stop could keep an axis that cut its own stop off), v4.52 · the R:R map now draws the stop the engine would place (zone + buffer, or the minimum-stop floor, whichever is wider) and the price scale is fitted to the map the overlay is actually drawing, so a stop 10+ points past the zone can no longer hang off the plot, v4.51 · the stop now obeys two rules instead of one: it sits 10 past the far edge of the zone (Stop Buffer, was 0.60) and it is never closer to the entry than the Minimum Stop Distance (default 50) — the wider of the two wins, and the card and journal print which one bound, v4.50 · six number settings were saved and then silently ignored on reload (Balance, Lot Size, Stop Buffer, Min R:R, Price Offset, Momentum late cap) — they now load back, v4.49 · a zone made by one violent candle is drawn but never traded, a late zone says so, Momentum entry is on by default, the retest is the default entry model again (30-day replay), a momentum break later than 0.2R is refused, a stop is only hit by the market (levels are re-based with the spot offset) every closed row names the bar that closed it, one trade runs at a time and an opposite setup confirmed at its own zone closes the open trade at market (flip), so no BUY and no SELL are ever live together, the lot size is what you set — the stop decides the dollars, and a trade restored from an older build cannot freeze the scan';
+  const BUILD_STAMP = '2026-11-10 · v4.57 · 5M/15M backtest history now paginates to a true 6-day window, the button reports the actual loaded execution timeframe, and a zero-trade result states how many candidates were open, unfilled or refused instead of appearing to run on absent data; the v4.56 · 1R leaves the original stop untouched, 2R books 50%, and 3R closes the runner unless opposing structure is at least 5R away; an extended runner trails to 3R at 4R, 4R at 5R, and one R behind each later full-R milestone, with initial risk preserved across trailing, reloads and P/L, v4.55 · every timeframe records its candle offset and recalibration rebases all candles plus live entry/SL/TP levels together before analysis, so the banner, zones and next tick cannot mix two price spaces; journal history and all strategy rules are unchanged, v4.54 · labels now distinguish a filtered candidate, the 0.5R arming band, and a real order: a SKIP says no order armed, and an in-range candidate quotes its distance plus the entry touch still required — trading rules, the 50-point stop floor, and the 10-point zone buffer are unchanged, v4.53 · the R:R price scale is re-fitted by forcing autoscale off for one frame (setting autoScale:true when it is already true is a no-op, which is why a projection with a wide stop could keep an axis that cut its own stop off), v4.52 · the R:R map now draws the stop the engine would place (zone + buffer, or the minimum-stop floor, whichever is wider) and the price scale is fitted to the map the overlay is actually drawing, so a stop 10+ points past the zone can no longer hang off the plot, v4.51 · the stop now obeys two rules instead of one: it sits 10 past the far edge of the zone (Stop Buffer, was 0.60) and it is never closer to the entry than the Minimum Stop Distance (default 50) — the wider of the two wins, and the card and journal print which one bound, v4.50 · six number settings were saved and then silently ignored on reload (Balance, Lot Size, Stop Buffer, Min R:R, Price Offset, Momentum late cap) — they now load back, v4.49 · a zone made by one violent candle is drawn but never traded, a late zone says so, Momentum entry is on by default, the retest is the default entry model again (30-day replay), a momentum break later than 0.2R is refused, a stop is only hit by the market (levels are re-based with the spot offset) every closed row names the bar that closed it, one trade runs at a time and an opposite setup confirmed at its own zone closes the open trade at market (flip), so no BUY and no SELL are ever live together, the lot size is what you set — the stop decides the dollars, and a trade restored from an older build cannot freeze the scan';
 
   let chart = null, candleSeries = null, volSeries = null, overlay = null, octx = null;
   let drawQueued = false;
@@ -2929,7 +2942,7 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
   /* One historical setup, managed with the same 1R/2R/3R + staircase rules as the live engine.
      `structureAsOf(bar.time)` must return only structure known before that bar. The function returns
      a closed journal record, or null for an unfilled / still-open simulation. */
-  function simulateHistoricalSetup(setup, z, candles, idx, structureAsOf) {
+  function simulateHistoricalSetup(setup, z, candles, idx, structureAsOf, openNote) {
     const tf = z.tf || (setup.zone && setup.zone.tf) || '5m';
     const initialRisk = Quant.initialRisk(setup), initialSl = setup.sl;
     const riskShape = { dir: setup.dir, entry: setup.entry, tp1: setup.tp1, rr: setup.rr, initialRisk, initialSl };
@@ -3016,10 +3029,17 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
         }
       }
     }
+    if (openNote) {
+      openNote.status = status;
+      openNote.booked = booked;
+      openNote.runnerExtended = runnerExtended;
+      openNote.runnerStage = runnerStage;
+      openNote.currentSl = +Number(currentSl).toFixed(2);
+    }
     return null;
   }
 
-  /* ---------------- 5. HISTORICAL BACKTEST ENGINE (300 BARS) ---------------- */
+  /* ---------------- 5. HISTORICAL BACKTEST ENGINE (LOADED 5M/15M HISTORY) ---------------- */
   function runHistoricalBacktest() {
     const tf = (state.activeTF === '5m' || state.activeTF === '15m') ? state.activeTF : '5m';
     const candles = state.candles[tf];
@@ -3032,6 +3052,8 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
     }
     const cfg = getCfg();
     let wins = 0, losses = 0, netR = 0;
+    let candidates = 0, openActive = 0, openPending = 0, bookedOpen = 0, extendedOpen = 0;
+    let evaluatedSetups = 0, refusedSetups = 0;
     const usedZoneIds = new Set();
     const btTrades = [];
 
@@ -3082,14 +3104,24 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
       for (const z of allZ) {
         if (usedZoneIds.has(z.id)) continue;
         const setup = Quant.buildSwingSetup(z, allZ, scan.swings, bias4h, bias1h, cfg);
-        if (!setup || !setup.passesRR) continue;
+        if (!setup) continue;
+        evaluatedSetups++;
+        if (!setup.passesRR) { refusedSetups++; continue; }
 
         usedZoneIds.add(z.id);
-        const rec = simulateHistoricalSetup(setup, z, candles, idx, structureAsOf);
+        candidates++;
+        const open = {};
+        const rec = simulateHistoricalSetup(setup, z, candles, idx, structureAsOf, open);
         if (rec) {
           btTrades.push(rec);
           if (rec.result === 'WIN') wins++; else losses++;
           netR += rec.rMultiple;
+        } else {
+          if (open.status === 'ACTIVE') {
+            openActive++;
+            if (open.booked) bookedOpen++;
+            if (open.runnerExtended) extendedOpen++;
+          } else openPending++;
         }
       }
     }
@@ -3107,7 +3139,17 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
 
     const total = wins + losses;
     const wr = total ? ((wins / total) * 100).toFixed(1) : '0.0';
-    log(`[DONE] Backtest complete on ${tf.toUpperCase()} (R:R ≥ 1:${cfg.minRR}, HTF bias evaluated per-bar): ${total} trades (${wins}W / ${losses}L • ${wr}% WR • ${netR >= 0 ? '+' : ''}${netR.toFixed(2)}R)${fresh.length ? ` · ${fresh.length} new journal rows with reconstructed charts` : ''}. Check Journal & Stats tabs!`, '#10b981');
+    const closedBars = Math.max(0, candles.length - 1);
+    const fmtBtDate = t => new Date(t * 1000).toISOString().slice(5, 16).replace('T', ' ');
+    const windowText = `${fmtBtDate(candles[0].time)} → ${fmtBtDate(candles[Math.max(0, candles.length - 2)].time)}`;
+    const stillText = openActive
+      ? ` · ${openActive} filled and still open${bookedOpen ? ` (${bookedOpen} reached 2R${extendedOpen ? `, ${extendedOpen} past the 3R decision` : ''})` : ''}`
+      : '';
+    const pendingText = openPending ? ` · ${openPending} never reached their entry` : '';
+    log(`[BACKTEST WINDOW] ${tf.toUpperCase()} · ${closedBars} closed bars · ${windowText} UTC. `
+      + `${candidates} setup(s) passed R:R/structure; ${evaluatedSetups - candidates} refused for not having a valid 1:${cfg.minRR} path. `
+      + `${total} closed${stillText}${pendingText}.`, '#60a5fa');
+    log(`[DONE] Backtest complete on ${tf.toUpperCase()} (R:R ≥ 1:${cfg.minRR}, HTF bias evaluated per-bar): ${total} trades (${wins}W / ${losses}L • ${wr}% WR • ${netR >= 0 ? '+' : ''}${netR.toFixed(2)}R)${fresh.length ? ` · ${fresh.length} new journal rows with reconstructed charts` : ''}${total ? '' : ' — no trade was recorded because none reached its TP or SL in the loaded window'}. Check Journal & Stats tabs!`, '#10b981');
   }
 
   /* ---------------- 6. JOURNAL & STATS PERSISTENCE ---------------- */
@@ -3545,7 +3587,7 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
 
     const tbody = $('journalTbody');
     if (!rows.length) {
-      tbody.innerHTML = `<tr><td colspan="17" style="text-align:center;color:var(--text-muted);padding:24px;">No trade records match filters yet. Click "▶ Run Backtest (300 Bars)" in the top bar or wait for a live trade to close.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="17" style="text-align:center;color:var(--text-muted);padding:24px;">No trade records match filters yet. Click “▶ Run Backtest” in the top bar or wait for a live trade to close.</td></tr>`;
       return;
     }
 
@@ -4464,23 +4506,73 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
     } catch (e) {}
   }
 
-  async function fetchTF(tf, limit = 300) {
+  /* Fetch a requested history window even when it exceeds Binance's 1,000-bar REST page limit.
+     The older code silently returned at most 1,000 bars and, with the default 300, could never
+     represent six days on 5M. Partial results are useful when the feed is degraded, so a first-page
+     failure is the only condition that makes the caller fall back to offline. */
+  async function fetchBars(tf, count) {
     const totalOff = state.spotOffset + getCfg().extraOffset;
-    const res = await fetch(`${REST_KLINES}?symbol=PAXGUSDT&interval=${tf}&limit=${limit}`);
-    const raw = await res.json();
-    return raw.map(k => ({
-      time: Math.floor(k[0] / 1000),
-      open: parseFloat(k[1]) + totalOff,
-      high: parseFloat(k[2]) + totalOff,
-      low: parseFloat(k[3]) + totalOff,
-      close: parseFloat(k[4]) + totalOff,
-      volume: parseFloat(k[5])
-    }));
+    const spanMs = Math.max(1, (TF_SEC[tf] || 300)) * 1000;
+    const out = [], seen = new Set();
+    let end = Date.now();
+    let firstAttempt = true;
+
+    while (out.length < Math.max(1, count)) {
+      const want = Math.min(1000, Math.max(1, count - out.length));
+      const start = end - (want * spanMs) - spanMs;
+      let raw;
+      try {
+        const res = await fetch(`${REST_KLINES}?symbol=PAXGUSDT&interval=${tf}&startTime=${start}&endTime=${end}&limit=${want}`);
+        raw = await res.json();
+      } catch (e) {
+        if (firstAttempt) return null;
+        break;
+      }
+      if (!Array.isArray(raw) || !raw.length) {
+        if (firstAttempt) return null;
+        break;
+      }
+      firstAttempt = false;
+      const rows = raw.map(k => ({
+        time: Math.floor(k[0] / 1000),
+        open: parseFloat(k[1]) + totalOff,
+        high: parseFloat(k[2]) + totalOff,
+        low: parseFloat(k[3]) + totalOff,
+        close: parseFloat(k[4]) + totalOff,
+        volume: parseFloat(k[5])
+      })).sort((a, b) => a.time - b.time);
+      const fresh = rows.filter(x => Number.isFinite(x.time) && !seen.has(x.time) && seen.add(x.time));
+      if (!fresh.length) break;
+      out.unshift(...fresh);
+      if (rows.length < want) break;
+      const nextEnd = (fresh[0].time * 1000) - 1;
+      if (!(nextEnd > 0) || nextEnd >= end) break;
+      end = nextEnd;
+    }
+    return out.length ? out.slice(-Math.max(1, count)) : null;
+  }
+
+  async function fetchTF(tf, limit = 300) {
+    return (await fetchBars(tf, limit)) || [];
+  }
+
+  function updateBacktestButtonLabel() {
+    const btn = $('btnBacktest');
+    if (!btn) return;
+    const tf = (state.activeTF === '5m' || state.activeTF === '15m') ? state.activeTF : '5m';
+    const arr = state.candles[tf] || [];
+    const closedBars = Math.max(0, arr.length - 1);
+    const days = closedBars ? (closedBars * (TF_SEC[tf] || 300) / 86400) : 0;
+    btn.textContent = closedBars
+      ? `▶ Run Backtest (${Math.round(days * 10) / 10}d · ${tf.toUpperCase()})`
+      : '▶ Run Backtest · loading history';
+    btn.title = `Replays the strategy on every loaded closed ${tf.toUpperCase()} bar. `
+      + `Target: ${BACKTEST_HISTORY_DAYS} days. Execution TF: ${tf.toUpperCase()}${state.activeTF !== tf ? ` (chart is on ${state.activeTF.toUpperCase()})` : ''}.`;
   }
 
   async function syncAllData() {
     await calibrateSpot();
-    const res = await Promise.all(['4h', '1h', '15m', '5m'].map(tf => fetchTF(tf, 300).catch(() => null)));
+    const res = await Promise.all(['4h', '1h', '15m', '5m'].map(tf => fetchBars(tf, HISTORY_BARS[tf] || 300)));
     if (!res.some(Boolean)) {
       $('connDot').className = 'status-dot offline';
       $('connText').textContent = 'Offline';
@@ -4507,10 +4599,19 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
     $('chartLoader').style.display = 'none';
     renderChartSeries();
     runFullAnalysis();
+    const btTf = (state.activeTF === '15m') ? '15m' : '5m';
+    const btArr = state.candles[btTf] || [];
+    if (btArr.length > 1) {
+      const days = ((btArr.length - 1) * (TF_SEC[btTf] || 300) / 86400).toFixed(1);
+      const fmt = t => new Date(t * 1000).toISOString().slice(5, 16).replace('T', ' ');
+      log(`[DATA] Backtest history loaded: ${btArr.length - 1} closed ${btTf.toUpperCase()} bars — `
+        + `${fmt(btArr[0].time)} → ${fmt(btArr[btArr.length - 2].time)} UTC (${days}d).`, '#60a5fa');
+    }
     return true;
   }
 
   function renderChartSeries() {
+    updateBacktestButtonLabel();
     const arr = state.candles[state.activeTF] || [];
     if (!arr.length) return;
     candleSeries.setData(arr.map(c => ({ time: c.time, open: c.open, high: c.high, low: c.low, close: c.close })));
@@ -5219,7 +5320,7 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
           if (arr && arr.length) {
             const last = arr[arr.length - 1];
             if (bar.time === last.time) arr[arr.length - 1] = bar;
-            else if (bar.time > last.time) { arr.push(bar); if (arr.length > 350) arr.shift(); }
+            else if (bar.time > last.time) { arr.push(bar); if (arr.length > historyCap(tf)) arr.splice(0, arr.length - historyCap(tf)); }
             candleSeries.update(bar);
             volSeries.update({ time: bar.time, value: bar.volume, color: bar.close >= bar.open ? 'rgba(30,83,229,0.5)' : 'rgba(10,10,10,0.5)' });
           }
@@ -5296,7 +5397,7 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
         };
         const last = arr[arr.length - 1];
         if (bar.time === last.time) arr[arr.length - 1] = bar;
-        else if (bar.time > last.time) { arr.push(bar); if (arr.length > 350) arr.shift(); }
+        else if (bar.time > last.time) { arr.push(bar); if (arr.length > historyCap(tf)) arr.splice(0, arr.length - historyCap(tf)); }
 
         if (tf === state.activeTF) {
           candleSeries.update({ time: bar.time, open: bar.open, high: bar.high, low: bar.low, close: bar.close });
@@ -5468,7 +5569,7 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
     const ok = await syncAllData();
     if (ok) {
       connectWS();
-      log('SMC Gold Terminal v4.56 online — build ' + BUILD_STAMP + '. 1R hold / 2R half / 3R close-or-extend with 5R structure room and staircase runner SL.', '#10b981');
+      log('SMC Gold Terminal v4.57 online — build ' + BUILD_STAMP + '. 6-day 5M/15M backtest data loaded; 1R hold / 2R half / 3R close-or-extend with 5R structure room and staircase runner SL.', '#10b981');
     }
     setInterval(calibrateSpot, 60000);
   }
