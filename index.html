@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>SMC Gold Terminal v4.57 — SMC / XAUUSD Terminal</title>
+<title>SMC Gold Terminal v4.58 — SMC / XAUUSD Terminal</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700;800&display=swap" rel="stylesheet">
@@ -342,7 +342,7 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
   <div class="brand">
     <div class="brand-logo">SMC</div>
     <div>
-      <div class="brand-title">SMC Gold Terminal <span class="pill pill-neutral" id="buildBadge">v4.57 6-DAY DATA</span></div>
+      <div class="brand-title">SMC Gold Terminal <span class="pill pill-neutral" id="buildBadge">v4.58 ONE-TRADE REPLAY</span></div>
       <div class="brand-sub">Swing Liquidity Targets • 1:2 R:R Filter • Auto Trade Lifecycle &amp; Screenshot Journal</div>
     </div>
   </div>
@@ -1500,7 +1500,7 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
   };
 
   /* Bumped on every rebuild — check this in the console to prove which build your browser loaded. */
-  const BUILD_STAMP = '2026-11-10 · v4.57 · 5M/15M backtest history now paginates to a true 6-day window, the button reports the actual loaded execution timeframe, and a zero-trade result states how many candidates were open, unfilled or refused instead of appearing to run on absent data; the v4.56 · 1R leaves the original stop untouched, 2R books 50%, and 3R closes the runner unless opposing structure is at least 5R away; an extended runner trails to 3R at 4R, 4R at 5R, and one R behind each later full-R milestone, with initial risk preserved across trailing, reloads and P/L, v4.55 · every timeframe records its candle offset and recalibration rebases all candles plus live entry/SL/TP levels together before analysis, so the banner, zones and next tick cannot mix two price spaces; journal history and all strategy rules are unchanged, v4.54 · labels now distinguish a filtered candidate, the 0.5R arming band, and a real order: a SKIP says no order armed, and an in-range candidate quotes its distance plus the entry touch still required — trading rules, the 50-point stop floor, and the 10-point zone buffer are unchanged, v4.53 · the R:R price scale is re-fitted by forcing autoscale off for one frame (setting autoScale:true when it is already true is a no-op, which is why a projection with a wide stop could keep an axis that cut its own stop off), v4.52 · the R:R map now draws the stop the engine would place (zone + buffer, or the minimum-stop floor, whichever is wider) and the price scale is fitted to the map the overlay is actually drawing, so a stop 10+ points past the zone can no longer hang off the plot, v4.51 · the stop now obeys two rules instead of one: it sits 10 past the far edge of the zone (Stop Buffer, was 0.60) and it is never closer to the entry than the Minimum Stop Distance (default 50) — the wider of the two wins, and the card and journal print which one bound, v4.50 · six number settings were saved and then silently ignored on reload (Balance, Lot Size, Stop Buffer, Min R:R, Price Offset, Momentum late cap) — they now load back, v4.49 · a zone made by one violent candle is drawn but never traded, a late zone says so, Momentum entry is on by default, the retest is the default entry model again (30-day replay), a momentum break later than 0.2R is refused, a stop is only hit by the market (levels are re-based with the spot offset) every closed row names the bar that closed it, one trade runs at a time and an opposite setup confirmed at its own zone closes the open trade at market (flip), so no BUY and no SELL are ever live together, the lot size is what you set — the stop decides the dollars, and a trade restored from an older build cannot freeze the scan';
+  const BUILD_STAMP = '2026-11-12 · v4.58 · the 5M/15M backtest now runs ONE trade at a time with flips, exactly as the live engine does — no more a dozen concurrent positions in a replay whose result the terminal could never have traded — a candidate is only armed at its own zone, and the position still open when the window ends is handed to the live tracker as the ACTIVE trade instead of being counted in a log line while the dashboard read NO ACTIVE TRADE; the v4.57 · 5M/15M backtest history now paginates to a true 6-day window, the button reports the actual loaded execution timeframe, and a zero-trade result states how many candidates were open, unfilled or refused instead of appearing to run on absent data; the v4.56 · 1R leaves the original stop untouched, 2R books 50%, and 3R closes the runner unless opposing structure is at least 5R away; an extended runner trails to 3R at 4R, 4R at 5R, and one R behind each later full-R milestone, with initial risk preserved across trailing, reloads and P/L, v4.55 · every timeframe records its candle offset and recalibration rebases all candles plus live entry/SL/TP levels together before analysis, so the banner, zones and next tick cannot mix two price spaces; journal history and all strategy rules are unchanged, v4.54 · labels now distinguish a filtered candidate, the 0.5R arming band, and a real order: a SKIP says no order armed, and an in-range candidate quotes its distance plus the entry touch still required — trading rules, the 50-point stop floor, and the 10-point zone buffer are unchanged, v4.53 · the R:R price scale is re-fitted by forcing autoscale off for one frame (setting autoScale:true when it is already true is a no-op, which is why a projection with a wide stop could keep an axis that cut its own stop off), v4.52 · the R:R map now draws the stop the engine would place (zone + buffer, or the minimum-stop floor, whichever is wider) and the price scale is fitted to the map the overlay is actually drawing, so a stop 10+ points past the zone can no longer hang off the plot, v4.51 · the stop now obeys two rules instead of one: it sits 10 past the far edge of the zone (Stop Buffer, was 0.60) and it is never closer to the entry than the Minimum Stop Distance (default 50) — the wider of the two wins, and the card and journal print which one bound, v4.50 · six number settings were saved and then silently ignored on reload (Balance, Lot Size, Stop Buffer, Min R:R, Price Offset, Momentum late cap) — they now load back, v4.49 · a zone made by one violent candle is drawn but never traded, a late zone says so, Momentum entry is on by default, the retest is the default entry model again (30-day replay), a momentum break later than 0.2R is refused, a stop is only hit by the market (levels are re-based with the spot offset) every closed row names the bar that closed it, one trade runs at a time and an opposite setup confirmed at its own zone closes the open trade at market (flip), so no BUY and no SELL are ever live together, the lot size is what you set — the stop decides the dollars, and a trade restored from an older build cannot freeze the scan';
 
   let chart = null, candleSeries = null, volSeries = null, overlay = null, octx = null;
   let drawQueued = false;
@@ -2942,99 +2942,144 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
   /* One historical setup, managed with the same 1R/2R/3R + staircase rules as the live engine.
      `structureAsOf(bar.time)` must return only structure known before that bar. The function returns
      a closed journal record, or null for an unfilled / still-open simulation. */
-  function simulateHistoricalSetup(setup, z, candles, idx, structureAsOf, openNote) {
+  /* ONE REPLAYED TRADE, WALKED BAR BY BAR (v4.58).
+     The rules are the live rules: 1R does nothing, 2R books 50%, 3R closes the remainder unless
+     opposing structure is at least 5R away, then the staircase trails 3R at 4R and one R behind
+     every later full-R milestone, with the original risk kept for every R and dollar figure.
+
+     It used to be a closed loop that ran ONE candidate to the end of the series, independently of
+     every other candidate. That is why the replay could show "13 trades" while the terminal is
+     allowed exactly one position at a time, and why a position that was still open when the window
+     ended vanished: the old shape had no way to hand it to anything. `step()` now returns either a
+     closed record or null, and `record()` lets the replay close the position at market exactly the
+     way the live flip does. */
+  function replayTrade(setup, z) {
     const tf = z.tf || (setup.zone && setup.zone.tf) || '5m';
     const initialRisk = Quant.initialRisk(setup), initialSl = setup.sl;
     const riskShape = { dir: setup.dir, entry: setup.entry, tp1: setup.tp1, rr: setup.rr, initialRisk, initialSl };
-    let status = 'PENDING', openedTime = null, fillBarTime = null;
-    let booked = false, realized = 0, currentSl = initialSl;
-    let runnerExtended = false, runnerStage = 0, runnerStopR = null, extension = null;
-    const stopTrail = [];
+    const t = {
+      setup, z, tf, riskShape, initialSl, initialRisk,
+      status: 'PENDING', openedTime: null, fillBarTime: null, fillBar: null, lastBar: null,
+      booked50: false, realizedR: 0, sl: initialSl,
+      runnerExtended: false, runnerStage: 0, runnerStopR: null, extension: null,
+      stopTrail: []
+    };
 
-    const closedRecord = (bar, exitPrice, kind) => {
+    /* A closed record for this trade, at `exitPrice`. `kind === 'FLIP'` is the market close the
+       live engine performs when the opposite side confirms — same money, same label, same bar. */
+    t.record = (bar, exitPrice, kind) => {
       const exitR = Quant.rAtPrice(riskShape, exitPrice);
-      const rMult = Number((booked ? realized + 0.5 * exitR : exitR).toFixed(2));
+      const rMult = Number((t.booked50 ? t.realizedR + 0.5 * exitR : exitR).toFixed(2));
       const isWin = rMult > 0;
       const btSess = Quant.getSession(bar.time).short;
       const finalLabel = kind === 'TP2' ? `50% @ 1:${Number(setup.rr2 || 3).toFixed(2)}`
-        : kind === 'RUNNER_SL' ? `50% @ ${exitR.toFixed(2)}R trailing SL` : '50% @ SL';
-      const legs = booked ? [`50% @ 1:${Number(setup.rr).toFixed(2)}`, finalLabel]
+        : kind === 'RUNNER_SL' ? `50% @ ${exitR.toFixed(2)}R trailing SL`
+        : kind === 'FLIP' ? `100% @ FLIP $${Number(exitPrice).toFixed(2)}` : '50% @ SL';
+      const legs = kind === 'FLIP'
+        ? (t.booked50 ? [`50% @ 1:${Number(setup.rr).toFixed(2)}`, `50% @ FLIP $${Number(exitPrice).toFixed(2)}`]
+                      : ['100% @ FLIP'])
+        : t.booked50 ? [`50% @ 1:${Number(setup.rr).toFixed(2)}`, finalLabel]
         : [kind === 'SL' ? '100% @ SL' : `100% @ ${finalLabel}`];
-      const extWhy = runnerExtended && extension
-        ? ` · 3R runner extended: ${extension.nearestPrice == null ? 'open air' : `${extension.nearestSrc} at $${extension.nearestPrice.toFixed(2)} (${extension.roomR.toFixed(2)}R)`}; staircase SL 3R at 4R, then one R behind.`
+      const extWhy = t.runnerExtended && t.extension
+        ? ` · 3R runner extended: ${t.extension.nearestPrice == null ? 'open air' : `${t.extension.nearestSrc} at $${t.extension.nearestPrice.toFixed(2)} (${t.extension.roomR.toFixed(2)}R)`}; staircase SL 3R at 4R, then one R behind.`
         : '';
       return {
         id: 'BT_' + bar.time + '_' + z.id,
         mode: 'BACKTEST', tf, session: btSess,
         why: setupWhy(setup, btSess) + extWhy,
         dir: setup.dir, grade: setup.grade,
-        entry: setup.entry, sl: currentSl, initialSl, initialRisk,
+        entry: setup.entry, sl: t.sl, initialSl, initialRisk,
         tp1: setup.tp1, tp2: setup.tp2, rr: setup.rr, rr2: setup.rr2,
         riskUsd: setup.riskUsd, lots: setup.lots, size: setup.size,
         zoneId: z.id, zoneBottom: z.bottom, zoneTop: z.top,
         result: isWin ? 'WIN' : 'LOSS', rMultiple: rMult,
-        status: kind === 'TP2' ? 'TP2 HIT' : kind === 'RUNNER_SL' ? 'RUNNER SL' : (booked ? 'PARTIAL+SL' : 'SL HIT'),
+        status: kind === 'TP2' ? 'TP2 HIT' : kind === 'RUNNER_SL' ? 'RUNNER SL'
+          : kind === 'FLIP' ? (t.booked50 ? 'FLIP EXIT (HALF BOOKED)' : 'FLIP EXIT')
+          : (t.booked50 ? 'PARTIAL+SL' : 'SL HIT'),
         exitKind: kind, exitPrice: +Number(exitPrice).toFixed(2),
-        booked50: booked, realizedR: realized, legs,
-        runnerExtended, runnerStage, runnerStopR, stopTrail,
-        extensionRoomR: extension && extension.roomR, extensionNearestPrice: extension && extension.nearestPrice,
-        extensionSrc: extension && extension.nearestSrc,
+        booked50: t.booked50, realizedR: t.realizedR, legs,
+        runnerExtended: t.runnerExtended, runnerStage: t.runnerStage, runnerStopR: t.runnerStopR, stopTrail: t.stopTrail.slice(),
+        extensionRoomR: t.extension && t.extension.roomR, extensionNearestPrice: t.extension && t.extension.nearestPrice,
+        extensionSrc: t.extension && t.extension.nearestSrc,
         pnlUsd: Number((rMult * setup.riskUsd).toFixed(2)),
-        openedAt: openedTime, closedAt: bar.time * 1000,
-        fillBarTime, sameBarFill: Number.isFinite(fillBarTime) && fillBarTime === bar.time,
+        openedAt: t.openedTime, closedAt: bar.time * 1000,
+        fillBarTime: t.fillBarTime, sameBarFill: Number.isFinite(t.fillBarTime) && t.fillBarTime === bar.time,
         closedByBar: { time: bar.time, high: +bar.high.toFixed(2), low: +bar.low.toFixed(2), close: +bar.close.toFixed(2) },
         touchProof: kind === 'TP2'
           ? `${setup.dir === 'SELL' ? 'bar low' : 'bar high'} ${(setup.dir === 'SELL' ? bar.low : bar.high).toFixed(2)} ${setup.dir === 'SELL' ? '≤' : '≥'} TP2 ${Number(exitPrice).toFixed(2)}`
+          : kind === 'FLIP'
+          ? `closed at market $${Number(exitPrice).toFixed(2)} on the flip (last ${String(tf).toUpperCase()} close `
+            + `${Number(bar.close).toFixed(2)}) — the opposite side confirmed at its own zone`
           : `${setup.dir === 'SELL' ? 'bar high' : 'bar low'} ${(setup.dir === 'SELL' ? bar.high : bar.low).toFixed(2)} ${setup.dir === 'SELL' ? '≥' : '≤'} ${kind === 'RUNNER_SL' ? 'trailing ' : ''}SL ${Number(exitPrice).toFixed(2)}`
       };
     };
 
-    for (let k = idx + 1; k < candles.length - 1; k++) {
-      const bar = candles[k];
-      if (status === 'PENDING') {
-        const invalid = setup.dir === 'BUY' ? bar.close < initialSl : bar.close > initialSl;
-        if (invalid) { status = 'CANCELLED'; break; }
+    /* One bar of management. Returns a closed record, or null while the trade is still running. */
+    t.step = (bar, structureAsOf) => {
+      t.lastBar = bar;
+      if (t.status === 'PENDING') {
+        const invalid = setup.dir === 'BUY' ? bar.close < t.initialSl : bar.close > t.initialSl;
+        if (invalid) { t.status = 'CANCELLED'; return null; }
         const touched = setup.dir === 'BUY' ? (bar.low <= setup.entry && bar.high >= setup.entry)
           : (bar.high >= setup.entry && bar.low <= setup.entry);
-        if (touched) { status = 'ACTIVE'; openedTime = bar.time * 1000; fillBarTime = bar.time; }
-      } else if (status === 'ACTIVE') {
-        const slHit = setup.dir === 'BUY' ? bar.low <= currentSl : bar.high >= currentSl;
-        const partHit = setup.dir === 'BUY' ? bar.high >= setup.tp1 : bar.low <= setup.tp1;
-        const finalHit = setup.dir === 'BUY' ? bar.high >= setup.tp2 : bar.low <= setup.tp2;
-        if (!booked && partHit) { booked = true; realized = 0.5 * setup.rr; }
-        if (slHit) return closedRecord(bar, currentSl, runnerExtended ? 'RUNNER_SL' : 'SL');
-
-        if (finalHit && !runnerExtended) {
-          if (Number(setup.rr2 || setup.rr) < 3 - 1e-9) return closedRecord(bar, setup.tp2, 'TP2');
-          const known = typeof structureAsOf === 'function' ? structureAsOf(bar.time) : null;
-          extension = known ? Quant.runnerExtensionInfo(riskShape, known.allZones || [], known.swings || [])
-            : { extend: false, roomR: 0, nearestPrice: null, nearestSrc: 'structure unavailable' };
-          if (!extension.extend) return closedRecord(bar, setup.tp2, 'TP2');
-          runnerExtended = true; runnerStage = 3; runnerStopR = null;
+        if (touched) {
+          t.status = 'ACTIVE'; t.openedTime = bar.time * 1000; t.fillBarTime = bar.time;
+          t.fillBar = { time: bar.time, high: +bar.high.toFixed(2), low: +bar.low.toFixed(2), close: +bar.close.toFixed(2) };
         }
+        return null;
+      }
+      if (t.status !== 'ACTIVE') return null;
 
-        if (runnerExtended) {
-          const favorableR = Quant.rAtPrice(riskShape, setup.dir === 'BUY' ? bar.high : bar.low);
-          const milestone = Math.floor(favorableR + 1e-9);
-          if (milestone >= 4 && milestone > runnerStage) {
-            const stopR = milestone - 1, candidate = Quant.levelAtR(riskShape, stopR);
-            const improves = setup.dir === 'BUY' ? candidate > currentSl + 1e-9 : candidate < currentSl - 1e-9;
-            if (improves && Number.isFinite(candidate)) {
-              currentSl = +candidate.toFixed(2); runnerStage = milestone; runnerStopR = stopR;
-              stopTrail.push({ at: bar.time * 1000, barTime: bar.time, milestone, stopR, price: currentSl });
-              const trailedStopHit = setup.dir === 'BUY' ? bar.low <= currentSl : bar.high >= currentSl;
-              if (trailedStopHit) return closedRecord(bar, currentSl, 'RUNNER_SL');
-            }
+      const slHit = setup.dir === 'BUY' ? bar.low <= t.sl : bar.high >= t.sl;
+      const partHit = setup.dir === 'BUY' ? bar.high >= setup.tp1 : bar.low <= setup.tp1;
+      const finalHit = setup.dir === 'BUY' ? bar.high >= setup.tp2 : bar.low <= setup.tp2;
+      if (!t.booked50 && partHit) { t.booked50 = true; t.realizedR = 0.5 * setup.rr; }
+      if (slHit) return t.record(bar, t.sl, t.runnerExtended ? 'RUNNER_SL' : 'SL');
+
+      if (finalHit && !t.runnerExtended) {
+        if (Number(setup.rr2 || setup.rr) < 3 - 1e-9) return t.record(bar, setup.tp2, 'TP2');
+        const known = typeof structureAsOf === 'function' ? structureAsOf(bar.time) : null;
+        t.extension = known ? Quant.runnerExtensionInfo(riskShape, known.allZones || [], known.swings || [])
+          : { extend: false, roomR: 0, nearestPrice: null, nearestSrc: 'structure unavailable' };
+        if (!t.extension.extend) return t.record(bar, setup.tp2, 'TP2');
+        t.runnerExtended = true; t.runnerStage = 3; t.runnerStopR = null;
+      }
+
+      if (t.runnerExtended) {
+        const favorableR = Quant.rAtPrice(riskShape, setup.dir === 'BUY' ? bar.high : bar.low);
+        const milestone = Math.floor(favorableR + 1e-9);
+        if (milestone >= 4 && milestone > t.runnerStage) {
+          const stopR = milestone - 1, candidate = Quant.levelAtR(riskShape, stopR);
+          const improves = setup.dir === 'BUY' ? candidate > t.sl + 1e-9 : candidate < t.sl - 1e-9;
+          if (improves && Number.isFinite(candidate)) {
+            t.sl = +candidate.toFixed(2); t.runnerStage = milestone; t.runnerStopR = stopR;
+            t.stopTrail.push({ at: bar.time * 1000, barTime: bar.time, milestone, stopR, price: t.sl });
+            const trailedStopHit = setup.dir === 'BUY' ? bar.low <= t.sl : bar.high >= t.sl;
+            if (trailedStopHit) return t.record(bar, t.sl, 'RUNNER_SL');
           }
         }
       }
+      return null;
+    };
+    return t;
+  }
+
+  /* Run one candidate from `idx` to the end of the series and return its closed record, or null for
+     an unfilled / still-open simulation. The backtest itself no longer uses this — it steps a single
+     shared slot — but the fixtures that judge ONE trade in isolation still drive it directly. */
+  function simulateHistoricalSetup(setup, z, candles, idx, structureAsOf, openNote) {
+    const t = replayTrade(setup, z);
+    for (let k = idx + 1; k < candles.length - 1; k++) {
+      const rec = t.step(candles[k], structureAsOf);
+      if (rec) return rec;
+      if (t.status === 'CANCELLED') break;
     }
     if (openNote) {
-      openNote.status = status;
-      openNote.booked = booked;
-      openNote.runnerExtended = runnerExtended;
-      openNote.runnerStage = runnerStage;
-      openNote.currentSl = +Number(currentSl).toFixed(2);
+      openNote.status = t.status;
+      openNote.booked = t.booked50;
+      openNote.runnerExtended = t.runnerExtended;
+      openNote.runnerStage = t.runnerStage;
+      openNote.currentSl = +Number(t.sl).toFixed(2);
     }
     return null;
   }
@@ -3052,9 +3097,9 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
     }
     const cfg = getCfg();
     let wins = 0, losses = 0, netR = 0;
-    let candidates = 0, openActive = 0, openPending = 0, bookedOpen = 0, extendedOpen = 0;
-    let evaluatedSetups = 0, refusedSetups = 0;
-    const usedZoneIds = new Set();
+    let taken = 0, refusedSetups = 0, busy = 0, waiting = 0, flipCloses = 0, cancelledUnfilled = 0;
+    let evaluatedSetups = 0;
+    const usedZoneIds = new Set(), countedBusy = new Set(), countedWait = new Set();
     const btTrades = [];
 
     /* HTF bias as it existed AT THAT BAR — no look-ahead. Only candles fully closed
@@ -3093,13 +3138,44 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
       return { allZones, swings };
     };
 
+    /* ONE TRADE AT A TIME — IN THE REPLAY AS WELL (v4.58).
+       The user's rule ("only one trade can be active at a time") was enforced by the live engine and
+       quietly NOT enforced by the replay, so the backtest measured something no account running this
+       terminal could ever do: on the six-day 5M window it held up to a dozen positions at once and
+       still reported "trades". There is now a single slot, filled in scan order, and an opposite
+       candidate confirmed at its own zone takes it by closing the running trade at market — the same
+       flip, the same money, the same bar. Every figure printed below is one the terminal could trade. */
+    let slot = null;
+    const closeSlot = (bar, kind) => {
+      const rec = slot.t.record(bar, +Number(bar.close).toFixed(2), kind);
+      btTrades.push(rec);
+      if (rec.result === 'WIN') wins++; else losses++;
+      netR += rec.rMultiple;
+      slot = null;
+      return rec;
+    };
+
     // Walk bar-by-bar from bar 60 to end
     for (let idx = 60; idx < candles.length - 1; idx++) {
+      const bar = candles[idx];
+
+      /* 1. manage whoever holds the slot, with the live rules, before looking for anything new */
+      if (slot) {
+        const rec = slot.t.step(bar, structureAsOf);
+        if (rec) {
+          btTrades.push(rec);
+          if (rec.result === 'WIN') wins++; else losses++;
+          netR += rec.rMultiple;
+          slot = null;
+        }
+      }
+
+      /* 2. then this bar's candidates */
       const slice = candles.slice(0, idx + 1);
       const scan = Quant.scanTimeframe(slice, tf);
       const allZ = scan.supply.concat(scan.demand).filter(z => !z.broken);
-      const bias4h = biasAsOf('4h', candles[idx].time);
-      const bias1h = biasAsOf('1h', candles[idx].time);
+      const bias4h = biasAsOf('4h', bar.time);
+      const bias1h = biasAsOf('1h', bar.time);
 
       for (const z of allZ) {
         if (usedZoneIds.has(z.id)) continue;
@@ -3108,22 +3184,52 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
         evaluatedSetups++;
         if (!setup.passesRR) { refusedSetups++; continue; }
 
-        usedZoneIds.add(z.id);
-        candidates++;
-        const open = {};
-        const rec = simulateHistoricalSetup(setup, z, candles, idx, structureAsOf, open);
-        if (rec) {
-          btTrades.push(rec);
-          if (rec.result === 'WIN') wins++; else losses++;
-          netR += rec.rMultiple;
-        } else {
-          if (open.status === 'ACTIVE') {
-            openActive++;
-            if (open.booked) bookedOpen++;
-            if (open.runnerExtended) extendedOpen++;
-          } else openPending++;
+        /* ARM ONLY AT THE ZONE — the live gate, applied to the replay (v4.58). The old walk took a
+           candidate the moment it appeared, up to 2.5R away from its own entry, and then let the
+           series decide. That produced trades the terminal would never have armed, so a replay
+           result could not be compared with what the live tracker does. `act.live` (inside the band,
+           or within ZONE_LIVE_R on the correct side) and the momentum entry are the only doors. */
+        const act = setup.zone ? setupActionability(setup, bar.close) : { live: true };
+        const atZoneNow = !!(act.live || setup.momentum);
+        if (!atZoneNow) {
+          if (!countedWait.has(z.id)) { countedWait.add(z.id); waiting++; }
+          continue;
         }
+
+        if (slot) {
+          const heldDir = String(slot.setup.dir || '').toUpperCase();
+          const sameDir = heldDir === String(setup.dir || '').toUpperCase();
+          /* A candidate only takes the slot the way it would live: the OPPOSITE side, confirming at
+             its own zone, with the flip switched on. Anything else waits for the slot to free up. */
+          if (sameDir || cfg.flipOnOpposite === false) {
+            if (!countedBusy.has(z.id)) { countedBusy.add(z.id); busy++; }
+            continue;
+          }
+          if (slot.t.status === 'ACTIVE') { closeSlot(bar, 'FLIP'); flipCloses++; }
+          else {                                    // an order that never filled is cancelled, not journalled
+            slot = null; cancelledUnfilled++;
+          }
+        }
+        usedZoneIds.add(z.id);
+        taken++;
+        slot = { t: replayTrade(setup, z), setup, z };
       }
+    }
+
+    /* 3. What is still open when the window ends is a real position, not a closed trade. It is not
+       journalled (no result exists yet) and an order that never filled is only counted — but an open
+       FILLED position is handed to the live tracker, because that is what it is: the trade the
+       terminal would be holding right now. Before this the replay said "12 filled and still open" in
+       the log while the dashboard went on reading NO ACTIVE TRADE. */
+    let stillOpen = 0, bookedOpen = 0, extendedOpen = 0, openPending = 0, handoff = null;
+    if (slot) {
+      const t = slot.t;
+      if (t.status === 'ACTIVE') {
+        stillOpen++;
+        if (t.booked50) bookedOpen++;
+        if (t.runnerExtended) extendedOpen++;
+        handoff = handoffReplayTrade(t, slot.setup, slot.z, tf, candles);
+      } else if (t.status === 'PENDING') openPending++;
     }
 
     // Merge non-duplicate backtest trades into journal, then render each trade's own charts
@@ -3142,16 +3248,91 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
     const closedBars = Math.max(0, candles.length - 1);
     const fmtBtDate = t => new Date(t * 1000).toISOString().slice(5, 16).replace('T', ' ');
     const windowText = `${fmtBtDate(candles[0].time)} → ${fmtBtDate(candles[Math.max(0, candles.length - 2)].time)}`;
-    const stillText = openActive
-      ? ` · ${openActive} filled and still open${bookedOpen ? ` (${bookedOpen} reached 2R${extendedOpen ? `, ${extendedOpen} past the 3R decision` : ''})` : ''}`
+    const stillText = stillOpen
+      ? ` · ${stillOpen} filled and still open${bookedOpen ? ` (${bookedOpen} reached 2R${extendedOpen ? `, ${extendedOpen} past the 3R decision` : ''})` : ''}`
       : '';
-    const pendingText = openPending ? ` · ${openPending} never reached their entry` : '';
+    const pendingText = (openPending + cancelledUnfilled)
+      ? ` · ${openPending} never reached their entry${cancelledUnfilled ? ` (${cancelledUnfilled} order(s) cancelled by a flip before filling)` : ''}`
+      : '';
+    const waitText = waiting ? ` · ${waiting} not armed at their zone on that bar` : '';
+    const busyText = `${busy ? ` · ${busy} refused while the single slot was busy` : ''}${flipCloses ? ` · ${flipCloses} flip(s) took the slot` : ''}`;
     log(`[BACKTEST WINDOW] ${tf.toUpperCase()} · ${closedBars} closed bars · ${windowText} UTC. `
-      + `${candidates} setup(s) passed R:R/structure; ${evaluatedSetups - candidates} refused for not having a valid 1:${cfg.minRR} path. `
+      + `${taken} setup(s) passed R:R/structure${busyText}${waitText}; ${refusedSetups} refused for not having a valid 1:${cfg.minRR} path. `
       + `${total} closed${stillText}${pendingText}.`, '#60a5fa');
-    log(`[DONE] Backtest complete on ${tf.toUpperCase()} (R:R ≥ 1:${cfg.minRR}, HTF bias evaluated per-bar): ${total} trades (${wins}W / ${losses}L • ${wr}% WR • ${netR >= 0 ? '+' : ''}${netR.toFixed(2)}R)${fresh.length ? ` · ${fresh.length} new journal rows with reconstructed charts` : ''}${total ? '' : ' — no trade was recorded because none reached its TP or SL in the loaded window'}. Check Journal & Stats tabs!`, '#10b981');
+    log(`[DONE] Backtest complete on ${tf.toUpperCase()} (R:R ≥ 1:${cfg.minRR}, HTF bias evaluated per-bar, one trade at a time with flips): ${total} trades (${wins}W / ${losses}L • ${wr}% WR • ${netR >= 0 ? '+' : ''}${netR.toFixed(2)}R)${fresh.length ? ` · ${fresh.length} new journal rows with reconstructed charts` : ''}${total ? '' : ' — no trade was recorded because none reached its TP or SL in the loaded window'}${handoff ? ` · the ${tf.toUpperCase()} ${handoff.dir} @ $${Number(handoff.entry).toFixed(2)} that was still open is now the ACTIVE trade on the dashboard` : (stillOpen ? ' · a trade was still open but the live engine holds the slot, so nothing was handed over' : '')}. Check Journal & Stats tabs!`, '#10b981');
   }
 
+  /* HAND THE OPEN REPLAY POSITION TO THE LIVE TRACKER (v4.58).
+     Same object shape the live engine builds, so every downstream consumer — the card, the pinned
+     journal row, R and dollar P/L, trailing, the reload restore, and the eventual TP/SL close — reads
+     it as an ordinary trade. It is NOT a journal row: only a closed trade earns one. A genuine LIVE
+     trade always keeps the slot; re-running the backtest replaces the previous handoff instead of
+     stacking a second position. */
+  function handoffReplayTrade(t, setup, z, tf, candles) {
+    const last = candles && candles.length ? candles[candles.length - 1] : null;
+    const held = state.liveTrades[0] || null;
+    if (held && held.source !== 'BACKTEST HANDOFF') {
+      log(`Not handed over — the ${String(tf).toUpperCase()} replay ended with a ${setup.dir} @ $${Number(setup.entry).toFixed(2)} still open, but a live `
+        + `${String(held.tf).toUpperCase()} ${held.dir} ${held.status} @ $${Number(held.entry).toFixed(2)} holds the only slot. `
+        + `It stays in the replay log as an open position; nothing new was tracked.`, '#f59e0b');
+      return null;
+    }
+    if (held) {
+      /* Replacing the previous replay handoff is NOT a trade that vanished. `dropFromLive` carries a
+         watchdog for exactly that accident, so using it here printed a red "[WATCHDOG] left tracking
+         with no record" and pushed a real position into the skip ledger for no reason. The slot simply
+         changes hands: mark it finished by THIS tab (so persistActiveTrade cannot resurrect it from
+         storage) and release it quietly. */
+      state.finishedIds.add(held.id);
+      const i = state.liveTrades.indexOf(held);
+      if (i >= 0) state.liveTrades.splice(i, 1);
+      syncPrimaryTrade();
+      log(`[HANDOFF] the previous replay handoff (${String(held.tf).toUpperCase()} ${held.dir} @ $${Number(held.entry).toFixed(2)}) released the slot to this one — `
+        + `one trade at a time, and neither was journalled.`, '#94a3b8');
+    }
+    const sess = last ? Quant.getSession(last.time).short : Quant.getSession().short;
+    const tr = {
+      id: 'BTH_' + (t.fillBarTime || (last ? last.time : Date.now())) + '_' + z.id,
+      mode: 'BACKTEST',
+      source: 'BACKTEST HANDOFF',
+      offsetAtArm: currentOffset(),
+      tf, session: sess,
+      dir: setup.dir, grade: setup.grade,
+      entry: setup.entry,
+      sl: +Number(t.sl).toFixed(2),                 // trailed stop, if the replay had trailed one
+      initialSl: t.initialSl, initialRisk: t.initialRisk,
+      tp1: setup.tp1, tp2: setup.tp2, rr: setup.rr, rr2: setup.rr2 || setup.rr,
+      runnerExtended: t.runnerExtended, runnerStage: t.runnerStage, runnerStopR: t.runnerStopR,
+      stopTrail: t.stopTrail.slice(),
+      riskUsd: setup.riskUsd, lots: setup.lots,
+      size: setup.size || Quant.positionSize(setup.entry, setup.sl, getCfg()),
+      zoneId: z.id, zoneBottom: z.bottom, zoneTop: z.top, startTime: z.startTime,
+      status: 'ACTIVE',
+      booked50: t.booked50, realizedR: t.realizedR,
+      legs: t.booked50 ? [`50% @ 1:${Number(setup.rr).toFixed(2)} booked in the replay`] : [],
+      why: setupWhy(setup, sess) + ` · still open when the ${String(tf).toUpperCase()} window ended — handed to the live tracker`,
+      checks: setup.checks || null,
+      createdAt: Date.now(),
+      openedAt: t.openedTime,
+      closedAt: null,
+      fillBarTime: t.fillBarTime, fillBar: t.fillBar,
+      handoffBarTime: last ? last.time : null
+    };
+    if (z.id) state.settledZoneIds.add(z.id);
+    state.liveTrades.push(tr);
+    state.lastArmAt = Date.now();
+    if (!state.lastArmAtByTf) state.lastArmAtByTf = {};
+    state.lastArmAtByTf[tf] = Date.now();
+    syncPrimaryTrade();
+    persistActiveTrade();
+    updateDashboardUI();
+    renderJournalTable();
+    log(`[HANDOFF] ${String(tf).toUpperCase()} ${tr.dir} (${tr.grade}) was open at the end of the replay @ $${tr.entry.toFixed(2)} `
+      + `(SL $${tr.sl.toFixed(2)}, TP1 $${tr.tp1.toFixed(2)}${tr.booked50 ? `, 50% already booked at ${Number(tr.realizedR).toFixed(2)}R` : ''}). `
+      + `It is now tracked live: the same 1R / 2R / 3R and staircase rules manage it from the next tick.`
+      + ` No journal row — it has no result yet.`, '#60a5fa');
+    return tr;
+  }
   /* ---------------- 6. JOURNAL & STATS PERSISTENCE ---------------- */
   /* localStorage now holds trade METADATA ONLY (a few hundred bytes per row).
      Charts live in IndexedDB, so image bloat can no longer blow the ~5 MB
@@ -3418,6 +3599,8 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
       _live: true,
       _filled: filled,
       result: filled ? (at.runnerExtended ? 'OPEN · extended runner' : at.booked50 ? 'OPEN · 50% booked' : 'OPEN') : 'PENDING',
+      /* `source` is what the replay handed over, so the row cannot be read as a signal that just fired. */
+      _fromBacktest: at.source === 'BACKTEST HANDOFF',
       rMultiple: Number(unrealR.toFixed(2)),
       pnlUsd: Number((unrealR * (at.riskUsd || 0)).toFixed(2)),
       _elapsedMin: Math.max(0, Math.round((Date.now() - (at.openedAt || at.createdAt || Date.now())) / 60000))
@@ -3468,7 +3651,8 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
       if (pEl) { pEl.textContent = rec._filled ? (rec.pnlUsd >= 0 ? '+$' : '-$') + Math.abs(rec.pnlUsd).toFixed(2) : '—'; pEl.style.color = col(rec.pnlUsd); }
       if (dEl) { dEl.textContent = rec._elapsedMin + 'm'; }
       if (pill) {
-        pill.textContent = rec.status === 'ACTIVE' ? 'OPEN · live' : 'PENDING · awaiting fill';
+        pill.textContent = rec.status === 'ACTIVE'
+          ? (rec._fromBacktest ? 'OPEN · from backtest' : 'OPEN · live') : 'PENDING · awaiting fill';
         pill.className = 'pill ' + (rec.status === 'ACTIVE' ? 'pill-warn' : 'pill-neutral');
       }
     });
@@ -3599,12 +3783,15 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
       const resClass = t.result === 'WIN' ? 'pill-buy' : t.result === 'LOSS' ? 'pill-sell' : 'pill-warn';
       const dirClass = t.dir === 'BUY' ? 'pill-buy' : 'pill-sell';
       const resText = live
-        ? (t.status === 'ACTIVE' ? 'OPEN · live' : 'PENDING · awaiting fill')
+        ? (t.status === 'ACTIVE' ? (t._fromBacktest ? 'OPEN · from backtest' : 'OPEN · live') : 'PENDING · awaiting fill')
         : `${t.result}${t.cancelReason ? ' · ' + cancelShort(t.cancelReason) : ''}`;
       const legNote = (t.legs && t.legs.length) ? t.legs.join(' + ') : '';
       const resTitle = live
-        ? (t.status === 'ACTIVE' ? 'Entry filled — floating P/L, not counted in Stats until TP or SL'
-                                 : 'Waiting for price to touch the entry — not counted in Stats yet')
+        ? (t.status === 'ACTIVE'
+            ? (t._fromBacktest
+                ? 'Open at the end of the backtest window and handed to the live tracker — floating P/L, not counted in Stats until TP or SL'
+                : 'Entry filled — floating P/L, not counted in Stats until TP or SL')
+            : 'Waiting for price to touch the entry — not counted in Stats yet')
         : (t.cancelReason ? 'Cancelled — ' + t.cancelReason : '');
       return `<tr data-idx="${idx}" data-trade-id="${t.id}"${live ? ' style="background:rgba(96,165,250,0.07);"' : ''}>
         <td class="mono">${dt}</td>
@@ -5148,17 +5335,20 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
     const trPill = $('stTradeStatePill');
     const sideBadge = $('sideTradeBadge');
     if (tr) {
-      trPill.textContent = `${tr.tf ? tr.tf.toUpperCase() + ' ' : ''}${tr.status}: ${tr.dir} @ $${tr.entry.toFixed(2)}`;
+      /* A position the replay ended holding and handed over is still a real open trade, but the card
+         must say where it came from — otherwise a six-day backtest looks like a signal just fired. */
+      const handed = tr.source === 'BACKTEST HANDOFF';
+      trPill.textContent = `${tr.tf ? tr.tf.toUpperCase() + ' ' : ''}${tr.status}: ${tr.dir} @ $${tr.entry.toFixed(2)}${handed ? ' · from backtest' : ''}`;
       trPill.className = 'pill ' + (tr.status === 'ACTIVE' ? (tr.dir === 'BUY' ? 'pill-buy' : 'pill-sell') : 'pill-warn');
       sideBadge.textContent = tr.status;
       sideBadge.className = trPill.className;
       if (tr.status === 'ACTIVE' && p != null) {
         const priceR = Quant.rAtPrice(tr, p);
         const curR = tr.booked50 ? (tr.realizedR || 0) + 0.5 * priceR : priceR;
-        $('stTradePnlSub').textContent = `${tr.runnerExtended ? 'Runner live' : 'Floating'}: ${curR >= 0 ? '+' : ''}${curR.toFixed(2)}R | SL $${tr.sl.toFixed(1)}`
+        $('stTradePnlSub').textContent = `${handed ? `Open at the end of the ${String(tr.tf).toUpperCase()} window · ` : ''}${tr.runnerExtended ? 'Runner live' : 'Floating'}: ${curR >= 0 ? '+' : ''}${curR.toFixed(2)}R | SL $${tr.sl.toFixed(1)}`
           + (tr.runnerExtended ? ` · next ${Math.max(4, Number(tr.runnerStage || 3) + 1)}R → SL ${Math.max(4, Number(tr.runnerStage || 3) + 1) - 1}R` : ` → TP1 $${tr.tp1.toFixed(1)}`);
       } else {
-        $('stTradePnlSub').textContent = `Waiting for price to touch $${tr.entry.toFixed(2)}…`;
+        $('stTradePnlSub').textContent = `${handed ? `Open at the end of the ${String(tr.tf).toUpperCase()} window · ` : ''}Waiting for price to touch $${tr.entry.toFixed(2)}…`;
       }
     } else {
       trPill.textContent = 'NO ACTIVE TRADE';
@@ -5569,7 +5759,7 @@ table.journal-table td.why-cell b { color: var(--text-primary); font-weight: 600
     const ok = await syncAllData();
     if (ok) {
       connectWS();
-      log('SMC Gold Terminal v4.57 online — build ' + BUILD_STAMP + '. 6-day 5M/15M backtest data loaded; 1R hold / 2R half / 3R close-or-extend with 5R structure room and staircase runner SL.', '#10b981');
+      log('SMC Gold Terminal v4.58 online — build ' + BUILD_STAMP + '. 6-day 5M/15M backtest data loaded; one trade at a time in the replay as well, with the open position handed to the live tracker; 1R hold / 2R half / 3R close-or-extend with 5R structure room and staircase runner SL.', '#10b981');
     }
     setInterval(calibrateSpot, 60000);
   }
